@@ -1,0 +1,761 @@
+"""
+charts.py
+---------
+Plotly figure builders — one function per chart.
+All functions accept DataFrames from calculations.py
+and return plotly.graph_objects.Figure objects.
+
+FIN 511 - Investments I: Module 1, Lesson 1-5
+"""
+
+import plotly.graph_objects as go
+import plotly.express as px
+import pandas as pd
+import numpy as np
+
+
+# ── Design tokens ──────────────────────────────────────────────────────────────
+COLORS = {
+    "navy":    "#1F4E79",
+    "blue":    "#2E75B6",
+    "lblue":   "#BDD7EE",
+    "green":   "#1E6B3A",
+    "lgreen":  "#C6EFCE",
+    "amber":   "#E8A020",
+    "red":     "#C00000",
+    "violet":  "#7B2D8B",
+    "gray":    "#595959",
+    "lgray":   "#F2F2F2",
+    "white":   "#FFFFFF",
+    "black":   "#000000",
+    # region colours
+    "efficient":  "#1E6B3A",
+    "dominated":  "#C00000",
+    "short_A1":   "#E8A020",
+    "long_A1":    "#7B2D8B",
+    "long_no_lev":"#2E75B6",
+    "long_lev":   "#C00000",
+    "short_cal":  "#7B2D8B",
+}
+
+RHO_COLORS = {
+    -0.8: "#1F4E79",
+    -0.4: "#2E75B6",
+     0.0: "#1E6B3A",
+     0.4: "#E8A020",
+     0.8: "#C00000",
+}
+
+REGION_LABELS = {
+    "efficient":   "Efficient Frontier",
+    "dominated":   "Dominated",
+    "short_A1":    "Short Asset 1 / Long Asset 2",
+    "long_A1":     "Long Asset 1 / Short Asset 2",
+    "long_no_lev": "Long (No Leverage)",
+    "long_lev":    "Long With Leverage",
+    "short":       "Short Risky Asset",
+}
+
+
+# ── Layout defaults ────────────────────────────────────────────────────────────
+def _base_layout(title, xaxis_title, yaxis_title, subtitle=""):
+    """Return a consistent Plotly layout dict."""
+    full_title = (f"<b>{title}</b><br>"
+                  f"<span style='font-size:12px;color:#595959'>{subtitle}</span>"
+                  if subtitle else f"<b>{title}</b>")
+    return dict(
+        title=dict(text=full_title, font=dict(size=15, color=COLORS["navy"]),
+                   x=0, xanchor="left"),
+        xaxis=dict(
+            title=dict(text=xaxis_title, font=dict(size=12, color=COLORS["gray"])),
+            tickfont=dict(size=11, color=COLORS["gray"]),
+            gridcolor="#E8E8E8", showgrid=True, zeroline=False,
+        ),
+        yaxis=dict(
+            title=dict(text=yaxis_title, font=dict(size=12, color=COLORS["gray"])),
+            tickfont=dict(size=11, color=COLORS["gray"]),
+            gridcolor="#E8E8E8", showgrid=True, zeroline=False,
+        ),
+        plot_bgcolor=COLORS["white"],
+        paper_bgcolor=COLORS["white"],
+        legend=dict(
+            font=dict(size=11), bgcolor="rgba(255,255,255,0.85)",
+            bordercolor="#CCCCCC", borderwidth=1,
+            x=1.01, y=1, xanchor="left",
+        ),
+        margin=dict(t=80, b=60, l=70, r=20),
+        hovermode="closest",
+    )
+
+
+def _hover_frontier(df_row_label=""):
+    """Standard hover template for frontier charts."""
+    return (
+        "<b>%{customdata[0]}</b><br>"
+        "Asset 1 Weight: %{customdata[1]:.1f}%<br>"
+        "Asset 2 Weight: %{customdata[2]:.1f}%<br>"
+        "<extra></extra>"
+        "──────────────────<br>"
+        "Exp. Return: %{y:.2f}%<br>"
+        "Std. Dev.: %{x:.2f}%<br>"
+        "Sharpe Ratio: %{customdata[3]:.3f}"
+    )
+
+
+def _hover_cal():
+    """Standard hover template for CAL charts."""
+    return (
+        "<b>%{customdata[0]}</b><br>"
+        "Risky Asset Weight: %{customdata[1]:.1f}%<br>"
+        "Risk-Free Weight: %{customdata[2]:.1f}%<br>"
+        "<extra></extra>"
+        "──────────────────<br>"
+        "Exp. Return: %{y:.2f}%<br>"
+        "Std. Dev.: %{x:.2f}%<br>"
+        "Sharpe Ratio: %{customdata[3]:.3f}"
+    )
+
+
+def _add_asset_markers(fig, r1, sd1, r2, sd2):
+    """Add scatter markers for 100% Asset 1 and 100% Asset 2."""
+    fig.add_trace(go.Scatter(
+        x=[sd1], y=[r1], mode="markers+text",
+        marker=dict(size=10, color=COLORS["navy"],
+                    symbol="diamond", line=dict(width=1, color="white")),
+        text=["100% Asset 1"], textposition="top right",
+        textfont=dict(size=10, color=COLORS["navy"]),
+        name="100% Asset 1",
+        customdata=[[REGION_LABELS.get("efficient",""), 100.0, 0.0, (r1-3)/sd1]],
+        hovertemplate=_hover_frontier(),
+        showlegend=True,
+    ))
+    fig.add_trace(go.Scatter(
+        x=[sd2], y=[r2], mode="markers+text",
+        marker=dict(size=10, color=COLORS["amber"],
+                    symbol="diamond", line=dict(width=1, color="white")),
+        text=["100% Asset 2"], textposition="top right",
+        textfont=dict(size=10, color=COLORS["amber"]),
+        name="100% Asset 2",
+        customdata=[[REGION_LABELS.get("efficient",""), 0.0, 100.0, (r2-3)/sd2]],
+        hovertemplate=_hover_frontier(),
+        showlegend=True,
+    ))
+    return fig
+
+
+def _add_mvp_marker(fig, mvp):
+    """Add a star marker for the Minimum Variance Portfolio."""
+    fig.add_trace(go.Scatter(
+        x=[mvp["sd"]], y=[mvp["ret"]], mode="markers+text",
+        marker=dict(size=14, color=COLORS["green"],
+                    symbol="star", line=dict(width=1, color="white")),
+        text=["⭐ MVP"], textposition="top left",
+        textfont=dict(size=10, color=COLORS["green"]),
+        name="Min. Variance Portfolio",
+        customdata=[[
+            "Min. Variance Portfolio",
+            mvp["w_A1"] * 100,
+            mvp["w_A2"] * 100,
+            mvp["sharpe"],
+        ]],
+        hovertemplate=_hover_frontier(),
+        showlegend=True,
+    ))
+    return fig
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 1 — PORTFOLIO FRONTIER CHARTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
+    """
+    Chart 1 — All Allocations (full frontier, requires short-selling ON).
+    Shows the complete hyperbola from w=-100% to w=+200%.
+    """
+    fig = go.Figure()
+
+    region_order = ["efficient", "dominated", "short_A1", "long_A1"]
+    for region in region_order:
+        df_r = frontier_df[frontier_df["region"] == region].sort_values("sd")
+        if df_r.empty:
+            continue
+        fig.add_trace(go.Scatter(
+            x=df_r["sd"], y=df_r["ret"],
+            mode="lines",
+            name=REGION_LABELS.get(region, region),
+            line=dict(color=COLORS.get(region, COLORS["blue"]), width=2.5),
+            customdata=list(zip(
+                [REGION_LABELS.get(region, region)] * len(df_r),
+                df_r["w_A1"] * 100,
+                df_r["w_A2"] * 100,
+                df_r["sharpe"],
+            )),
+            hovertemplate=_hover_frontier(),
+        ))
+
+    fig = _add_mvp_marker(fig, mvp)
+    fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
+
+    fig.update_layout(_base_layout(
+        title="Portfolio Frontier — All Allocations",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="Asset 1 Weight: −100% → +200%  |  Asset 2 Weight: +200% → −100%",
+    ))
+    return fig
+
+
+def chart_frontier_efficient_dominated(frontier_df, r1, sd1, r2, sd2, mvp):
+    """
+    Chart 2 — Efficient vs Dominated (long-only, always visible).
+    Upper portion = efficient frontier. Lower portion = dominated.
+    """
+    fig = go.Figure()
+
+    for region in ["efficient", "dominated"]:
+        df_r = frontier_df[frontier_df["region"] == region].sort_values("w_A1", ascending=False)
+        if df_r.empty:
+            continue
+        fig.add_trace(go.Scatter(
+            x=df_r["sd"], y=df_r["ret"],
+            mode="lines",
+            name=REGION_LABELS[region],
+            line=dict(
+                color=COLORS[region],
+                width=3 if region == "efficient" else 2,
+                dash="solid" if region == "efficient" else "dash",
+            ),
+            customdata=list(zip(
+                [REGION_LABELS[region]] * len(df_r),
+                df_r["w_A1"] * 100,
+                df_r["w_A2"] * 100,
+                df_r["sharpe"],
+            )),
+            hovertemplate=_hover_frontier(),
+        ))
+
+    fig = _add_mvp_marker(fig, mvp)
+    fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
+
+    # Vertical reference line through MVP
+    fig.add_vline(
+        x=mvp["sd"], line_dash="dot", line_color=COLORS["gray"],
+        line_width=1, opacity=0.5,
+        annotation_text="MVP",
+        annotation_position="top",
+        annotation_font=dict(size=10, color=COLORS["gray"]),
+    )
+
+    fig.update_layout(_base_layout(
+        title="Efficient Frontier vs. Dominated Portfolios",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="Asset 1 Weight: 0% → 100%  |  Asset 2 Weight: 0% → 100%",
+    ))
+    return fig
+
+
+def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
+    """
+    Chart 3 — Short Asset 1 / Long Asset 2 (requires short-selling ON).
+    Region where w_A1 < 0 — highest returns but highest variance.
+    """
+    df_r = frontier_df[frontier_df["region"] == "short_A1"].sort_values("sd")
+    fig  = go.Figure()
+
+    if not df_r.empty:
+        fig.add_trace(go.Scatter(
+            x=df_r["sd"], y=df_r["ret"],
+            mode="lines",
+            name="Short Asset 1 / Long Asset 2",
+            line=dict(color=COLORS["short_A1"], width=2.5),
+            customdata=list(zip(
+                ["Short Asset 1 / Long Asset 2"] * len(df_r),
+                df_r["w_A1"] * 100,
+                df_r["w_A2"] * 100,
+                df_r["sharpe"],
+            )),
+            hovertemplate=_hover_frontier(),
+        ))
+
+    fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
+
+    fig.update_layout(_base_layout(
+        title="Short Asset 1 / Long Asset 2",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="Asset 1 Weight: −100% → 0%  |  Asset 2 Weight: 100% → 200%",
+    ))
+    return fig
+
+
+def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
+    """
+    Chart 4 — Long Asset 1 / Short Asset 2 (requires short-selling ON).
+    Region where w_A1 > 1 — dominated: high risk, low return.
+    """
+    df_r = frontier_df[frontier_df["region"] == "long_A1"].sort_values("sd")
+    fig  = go.Figure()
+
+    if not df_r.empty:
+        fig.add_trace(go.Scatter(
+            x=df_r["sd"], y=df_r["ret"],
+            mode="lines",
+            name="Long Asset 1 / Short Asset 2",
+            line=dict(color=COLORS["long_A1"], width=2.5, dash="dash"),
+            customdata=list(zip(
+                ["Long Asset 1 / Short Asset 2"] * len(df_r),
+                df_r["w_A1"] * 100,
+                df_r["w_A2"] * 100,
+                df_r["sharpe"],
+            )),
+            hovertemplate=_hover_frontier(),
+        ))
+
+    fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
+
+    # Warning annotation
+    fig.add_annotation(
+        text="⚠ Dominated region — same risk as portfolios<br>above MVP but lower return",
+        xref="paper", yref="paper", x=0.5, y=0.05,
+        showarrow=False,
+        font=dict(size=11, color=COLORS["red"]),
+        bgcolor="rgba(255,200,200,0.3)",
+        bordercolor=COLORS["red"], borderwidth=1,
+    )
+
+    fig.update_layout(_base_layout(
+        title="Long Asset 1 / Short Asset 2 — Dominated",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="Asset 1 Weight: 100% → 200%  |  Asset 2 Weight: −100% → 0%",
+    ))
+    return fig
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 2 — CAL CHARTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _cal_traces(cal_df, regions, rf):
+    """
+    Helper: build Scatter traces for specified CAL regions.
+    Returns list of go.Scatter objects.
+    """
+    traces = []
+    for region in regions:
+        df_r = cal_df[cal_df["region"] == region].sort_values("sd")
+        if df_r.empty:
+            continue
+        traces.append(go.Scatter(
+            x=df_r["sd"], y=df_r["ret"],
+            mode="lines",
+            name=REGION_LABELS.get(region, region),
+            line=dict(color=COLORS.get(region, COLORS["blue"]), width=2.5,
+                      dash="dash" if region == "short" else "solid"),
+            customdata=list(zip(
+                [REGION_LABELS.get(region, region)] * len(df_r),
+                df_r["w_risky"] * 100,
+                df_r["w_rf"] * 100,
+                df_r["sharpe"],
+            )),
+            hovertemplate=_hover_cal(),
+        ))
+    return traces
+
+
+def _add_cal_key_markers(fig, r_risky, sd_risky, rf):
+    """Add markers for 100% RF, 100% Risky, and w=2 leverage points."""
+    points = [
+        (0.0,  rf,                   0.0,        "100% Risk-Free",          COLORS["green"]),
+        (sd_risky, r_risky,          sd_risky,   "100% Risky Asset",        COLORS["navy"]),
+        (2*sd_risky, 2*r_risky-rf,   2*sd_risky, "w=2 (Leverage)",         COLORS["red"]),
+    ]
+    for sd_val, ret_val, _, label, color in points:
+        w       = sd_val / sd_risky if sd_risky > 0 else 0
+        w_rf    = 1 - w
+        sharpe  = (r_risky - rf) / sd_risky if sd_risky > 0 else 0
+        fig.add_trace(go.Scatter(
+            x=[sd_val], y=[ret_val],
+            mode="markers+text",
+            marker=dict(size=10, color=color, symbol="circle",
+                        line=dict(width=1, color="white")),
+            text=[label], textposition="top right",
+            textfont=dict(size=10, color=color),
+            name=label,
+            customdata=[[label, w*100, w_rf*100, sharpe]],
+            hovertemplate=_hover_cal(),
+            showlegend=True,
+        ))
+    return fig
+
+
+def chart_cal_all(cal_df, r_risky, sd_risky, rf):
+    """
+    CAL Chart 1 — All Allocations (requires short-selling ON).
+    Full CAL from w=−100% to w=+200%.
+    """
+    fig = go.Figure()
+    for trace in _cal_traces(cal_df, ["short", "long_no_lev", "long_lev"], rf):
+        fig.add_trace(trace)
+
+    fig = _add_cal_key_markers(fig, r_risky, sd_risky, rf)
+    fig.add_hline(y=rf, line_dash="dot", line_color=COLORS["gray"],
+                  line_width=1, opacity=0.5,
+                  annotation_text=f"rf = {rf}%",
+                  annotation_position="right",
+                  annotation_font=dict(size=10, color=COLORS["gray"]))
+
+    fig.update_layout(_base_layout(
+        title="CAL — All Allocations",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="Risky Asset Weight: −100% → +200%  |  Risk-Free Weight: +200% → −100%",
+    ))
+    return fig
+
+
+def chart_cal_all_long(cal_df, r_risky, sd_risky, rf):
+    """
+    CAL Chart 2 — All Long (always visible, placed first when short-selling OFF).
+    Long-only including leverage: w=0% to w=+200%.
+    """
+    df_filtered = cal_df[cal_df["w_risky"] >= 0].copy()
+    fig = go.Figure()
+
+    for trace in _cal_traces(df_filtered, ["long_no_lev", "long_lev"], rf):
+        fig.add_trace(trace)
+
+    fig = _add_cal_key_markers(fig, r_risky, sd_risky, rf)
+    fig.add_hline(y=rf, line_dash="dot", line_color=COLORS["gray"],
+                  line_width=1, opacity=0.5,
+                  annotation_text=f"rf = {rf}%",
+                  annotation_position="right",
+                  annotation_font=dict(size=10, color=COLORS["gray"]))
+
+    fig.update_layout(_base_layout(
+        title="CAL — All Long (No Leverage + With Leverage)",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="Risky Asset Weight: 0% → +200%  |  Risk-Free Weight: +100% → −100%",
+    ))
+    return fig
+
+
+def chart_cal_long_no_leverage(cal_df, r_risky, sd_risky, rf):
+    """
+    CAL Chart 3 — Long Without Leverage (always visible).
+    w=0% to w=100%: from pure T-Bills to 100% risky asset.
+    """
+    df_filtered = cal_df[
+        (cal_df["w_risky"] >= 0) & (cal_df["w_risky"] <= 1)
+    ].copy()
+    fig = go.Figure()
+
+    for trace in _cal_traces(df_filtered, ["long_no_lev"], rf):
+        fig.add_trace(trace)
+
+    # Only add RF and 100% Risky markers (no leverage point)
+    for w_val, label, color in [
+        (0.0, "100% Risk-Free",   COLORS["green"]),
+        (1.0, "100% Risky Asset", COLORS["navy"]),
+    ]:
+        ret_val = w_val * r_risky + (1 - w_val) * rf
+        sd_val  = w_val * sd_risky
+        w_rf    = 1 - w_val
+        sharpe  = (r_risky - rf) / sd_risky if sd_risky > 0 else 0
+        fig.add_trace(go.Scatter(
+            x=[sd_val], y=[ret_val], mode="markers+text",
+            marker=dict(size=10, color=color, symbol="circle",
+                        line=dict(width=1, color="white")),
+            text=[label], textposition="top right",
+            textfont=dict(size=10, color=color),
+            name=label,
+            customdata=[[label, w_val*100, w_rf*100, sharpe]],
+            hovertemplate=_hover_cal(),
+            showlegend=True,
+        ))
+
+    fig.update_layout(_base_layout(
+        title="CAL — Long Without Leverage",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="Risky Asset Weight: 0% → 100%  |  Risk-Free Weight: 100% → 0%",
+    ))
+    return fig
+
+
+def chart_cal_long_with_leverage(cal_df, r_risky, sd_risky, rf):
+    """
+    CAL Chart 4 — Long With Leverage (always visible).
+    w=100% to w=200%: borrowing at rf to amplify risky exposure.
+    """
+    df_filtered = cal_df[cal_df["w_risky"] >= 1.0].copy()
+    fig = go.Figure()
+
+    for trace in _cal_traces(df_filtered, ["long_lev"], rf):
+        fig.add_trace(trace)
+
+    # Add 100% Risky and w=2 markers
+    for w_val, label, color in [
+        (1.0, "100% Risky Asset (start)", COLORS["navy"]),
+        (2.0, "w=2 (Max Leverage)",       COLORS["red"]),
+    ]:
+        ret_val = w_val * r_risky + (1 - w_val) * rf
+        sd_val  = w_val * sd_risky
+        w_rf    = 1 - w_val
+        sharpe  = (r_risky - rf) / sd_risky if sd_risky > 0 else 0
+        fig.add_trace(go.Scatter(
+            x=[sd_val], y=[ret_val], mode="markers+text",
+            marker=dict(size=10, color=color, symbol="circle",
+                        line=dict(width=1, color="white")),
+            text=[label], textposition="top right",
+            textfont=dict(size=10, color=color),
+            name=label,
+            customdata=[[label, w_val*100, w_rf*100, sharpe]],
+            hovertemplate=_hover_cal(),
+            showlegend=True,
+        ))
+
+    # Annotation explaining leverage
+    fig.add_annotation(
+        text=(f"Borrow at rf={rf}% to invest<br>"
+              "more than 100% in risky asset.<br>"
+              "Amplifies both return AND risk."),
+        xref="paper", yref="paper", x=0.02, y=0.95,
+        showarrow=False,
+        font=dict(size=10, color=COLORS["red"]),
+        bgcolor="rgba(255,200,200,0.3)",
+        bordercolor=COLORS["red"], borderwidth=1,
+        align="left",
+    )
+
+    fig.update_layout(_base_layout(
+        title="CAL — Long With Leverage",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="Risky Asset Weight: 100% → 200%  |  Risk-Free Weight: 0% → −100% (borrowing)",
+    ))
+    return fig
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 3 — CORRELATION EFFECT CHARTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2):
+    """
+    Tab 3 Chart 1 — Overlaid efficient frontiers for 5 correlation values.
+    Current ρ is shown with thicker line and full opacity.
+    All others are dashed with reduced opacity.
+
+    Parameters
+    ----------
+    rho_frontiers : dict  {rho: DataFrame}  from build_rho_frontiers()
+    current_rho   : float  currently selected ρ value
+    """
+    fig = go.Figure()
+
+    for rho, df in rho_frontiers.items():
+        is_current = abs(rho - current_rho) < 1e-9
+        color      = RHO_COLORS.get(rho, COLORS["blue"])
+        label      = f"ρ = {rho}"
+        if is_current:
+            label += "  ← current"
+
+        fig.add_trace(go.Scatter(
+            x=df["sd"], y=df["ret"],
+            mode="lines",
+            name=label,
+            line=dict(
+                color=color,
+                width=3.5 if is_current else 1.5,
+                dash="solid" if is_current else "dash",
+            ),
+            opacity=1.0 if is_current else 0.55,
+            customdata=list(zip(
+                [f"ρ={rho}"] * len(df),
+                df["w_A1"] * 100,
+                df["w_A2"] * 100,
+                df["sharpe"],
+            )),
+            hovertemplate=_hover_frontier(),
+        ))
+
+    # Asset endpoint markers
+    fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
+
+    # Note about long-only
+    fig.add_annotation(
+        text="Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)",
+        xref="paper", yref="paper", x=0.0, y=-0.12,
+        showarrow=False, font=dict(size=10, color=COLORS["gray"]),
+        xanchor="left",
+    )
+
+    fig.update_layout(_base_layout(
+        title="Effect of Correlation on the Efficient Frontier",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="Lower ρ → frontier bows further left → more diversification benefit",
+    ))
+    return fig
+
+
+def chart_rho_mvp_table(rho_mvp_df):
+    """
+    Tab 3 Chart 2 — MVP comparison table as a Plotly table figure.
+    Highlights the current ρ row.
+
+    Parameters
+    ----------
+    rho_mvp_df : pd.DataFrame  from rho_mvp_table() in calculations.py
+    """
+    display_df = rho_mvp_df.drop(columns=["is_current"]).copy()
+    display_df["Correlation (ρ)"] = rho_mvp_df.apply(
+        lambda r: f"★ {r['Correlation (ρ)']}  ← current" if r["is_current"]
+                  else str(r["Correlation (ρ)"]),
+        axis=1
+    )
+
+    # Row colours
+    fill_colors = []
+    for _, row in rho_mvp_df.iterrows():
+        if row["is_current"]:
+            fill_colors.append("#C6EFCE")   # light green for current
+        else:
+            fill_colors.append("#F8F9FA")
+
+    n_cols = len(display_df.columns)
+
+    fig = go.Figure(data=[go.Table(
+        columnwidth=[180, 140, 140, 120, 130, 120],
+        header=dict(
+            values=[f"<b>{c}</b>" for c in display_df.columns],
+            fill_color=COLORS["navy"],
+            font=dict(color="white", size=12),
+            align="center",
+            height=36,
+        ),
+        cells=dict(
+            values=[display_df[c].tolist() for c in display_df.columns],
+            fill_color=[fill_colors] * n_cols,
+            font=dict(color=COLORS["gray"], size=11),
+            align=["left"] + ["center"] * (n_cols - 1),
+            height=32,
+        ),
+    )])
+
+    fig.update_layout(
+        title=dict(
+            text="<b>Min. Variance Portfolio — Comparison Across Correlations</b>",
+            font=dict(size=14, color=COLORS["navy"]),
+            x=0, xanchor="left",
+        ),
+        margin=dict(t=60, b=20, l=0, r=0),
+        paper_bgcolor=COLORS["white"],
+    )
+    return fig
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SUMMARY TABLES AS PLOTLY FIGURES
+# ══════════════════════════════════════════════════════════════════════════════
+
+def chart_frontier_summary_table(summary_df):
+    """
+    Render the frontier summary table (bottom of Tab 1) as a Plotly table.
+
+    Parameters
+    ----------
+    summary_df : pd.DataFrame  from frontier_summary_table() in calculations.py
+    """
+    n_cols = len(summary_df.columns)
+
+    # Highlight special portfolios
+    fill_colors = []
+    for _, row in summary_df.iterrows():
+        if "⭐" in str(row.get("Portfolio", "")):
+            fill_colors.append("#FFF3CD")   # amber tint for optimal portfolios
+        else:
+            fill_colors.append("#F8F9FA")
+
+    fig = go.Figure(data=[go.Table(
+        columnwidth=[250, 130, 130, 110, 110, 110],
+        header=dict(
+            values=[f"<b>{c}</b>" for c in summary_df.columns],
+            fill_color=COLORS["navy"],
+            font=dict(color="white", size=12),
+            align="center",
+            height=36,
+        ),
+        cells=dict(
+            values=[summary_df[c].tolist() for c in summary_df.columns],
+            fill_color=[fill_colors] * n_cols,
+            font=dict(color=COLORS["gray"], size=11),
+            align=["left"] + ["center"] * (n_cols - 1),
+            height=32,
+        ),
+    )])
+
+    fig.update_layout(
+        title=dict(
+            text="<b>Portfolio Summary — Key Allocation Points</b>",
+            font=dict(size=14, color=COLORS["navy"]),
+            x=0, xanchor="left",
+        ),
+        margin=dict(t=60, b=20, l=0, r=0),
+        paper_bgcolor=COLORS["white"],
+    )
+    return fig
+
+
+def chart_cal_summary_table(cal_summary_df):
+    """
+    Render the CAL summary table (bottom of Tab 2) as a Plotly table.
+
+    Parameters
+    ----------
+    cal_summary_df : pd.DataFrame  from cal_summary_table() in calculations.py
+    """
+    n_cols = len(cal_summary_df.columns)
+
+    fill_colors = []
+    for _, row in cal_summary_df.iterrows():
+        region = str(row.get("Region", ""))
+        if "Leverage" in region:
+            fill_colors.append("#FDE8E8")   # red tint for leverage
+        elif "Short" in region:
+            fill_colors.append("#EDE7F6")   # violet tint for short
+        else:
+            fill_colors.append("#F8F9FA")
+
+    fig = go.Figure(data=[go.Table(
+        columnwidth=[280, 150, 140, 110, 110, 110, 160],
+        header=dict(
+            values=[f"<b>{c}</b>" for c in cal_summary_df.columns],
+            fill_color=COLORS["navy"],
+            font=dict(color="white", size=12),
+            align="center",
+            height=36,
+        ),
+        cells=dict(
+            values=[cal_summary_df[c].tolist() for c in cal_summary_df.columns],
+            fill_color=[fill_colors] * n_cols,
+            font=dict(color=COLORS["gray"], size=11),
+            align=["left"] + ["center"] * (n_cols - 1),
+            height=32,
+        ),
+    )])
+
+    fig.update_layout(
+        title=dict(
+            text="<b>CAL Summary — Key Portfolio Points</b>",
+            font=dict(size=14, color=COLORS["navy"]),
+            x=0, xanchor="left",
+        ),
+        margin=dict(t=60, b=20, l=0, r=0),
+        paper_bgcolor=COLORS["white"],
+    )
+    return fig
