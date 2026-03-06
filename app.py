@@ -675,21 +675,32 @@ with tab2:
     st.metric("CAL Equation",
               f"E[R] = {c_rf:.1f}% + {cal_sharpe:.3f} × σ")
 
-    # Row 2 — Key portfolio points on the CAL
-    p1, p2, p3, p4 = st.columns(4)
-    p1.metric("w = 0  (100% Risk-Free)",
-              f"{c_rf:.2f}%",
-              "σ = 0.00%")
-    p2.metric("w = 1  (100% Risky)",
-              f"{c_r_risky:.2f}%",
-              f"σ = {c_sd_risky:.2f}%")
-    p3.metric("w = 1.5  (150% Risky, 50% Borrowed)",
-              f"{1.5*c_r_risky - 0.5*c_rf:.2f}%",
-              f"σ = {1.5*c_sd_risky:.2f}%")
-    p4.metric("w = 2  (200% Risky, 100% Borrowed)",
-              f"{2*c_r_risky - c_rf:.2f}%",
-              f"σ = {2*c_sd_risky:.2f}%",
-              help="Borrow 100% at risk free to double risky exposure")
+    # Row 2 — Key portfolio points on the CAL (HTML cards — no delta arrows)
+    def cal_point_card(title, ret, sd, border_color="#2E75B6"):
+        return (
+            f'<div style="background:#F2F7FC;border:1px solid #BDD7EE;'
+            f'border-top:4px solid {border_color};border-radius:8px;'
+            f'padding:14px 18px;flex:1;">'
+            f'<div style="font-size:0.82rem;color:#595959;margin-bottom:6px;">{title}</div>'
+            f'<div style="font-size:1.6rem;font-weight:700;color:#1F4E79;font-family:monospace;'
+            f'margin-bottom:4px;">{ret}</div>'
+            f'<div style="font-size:0.85rem;color:#595959;">σ = {sd}</div>'
+            f'</div>'
+        )
+
+    cp1 = cal_point_card("w = 0 &nbsp;(100% Risk-Free)",
+                         f"{c_rf:.2f}%", "0.00%", border_color="#595959")
+    cp2 = cal_point_card("w = 1 &nbsp;(100% Risky)",
+                         f"{c_r_risky:.2f}%", f"{c_sd_risky:.2f}%", border_color="#2E75B6")
+    cp3 = cal_point_card("w = 1.5 &nbsp;(1.5× Leverage)",
+                         f"{1.5*c_r_risky - 0.5*c_rf:.2f}%", f"{1.5*c_sd_risky:.2f}%", border_color="#E8A020")
+    cp4 = cal_point_card("w = 2 &nbsp;(2× Leverage)",
+                         f"{2*c_r_risky - c_rf:.2f}%", f"{2*c_sd_risky:.2f}%", border_color="#C00000")
+
+    st.markdown(
+        f'<div style="display:flex;gap:16px;margin-bottom:8px;">{cp1}{cp2}{cp3}{cp4}</div>',
+        unsafe_allow_html=True,
+    )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
