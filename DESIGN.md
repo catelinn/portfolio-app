@@ -3,7 +3,7 @@
 
 **Course:** FIN 511 — Investments I: Fundamentals of Performance Evaluation  
 **Module:** 1 — Lesson 1-5: Portfolio Choice in General Settings  
-**Version:** 1.9 | March 2026
+**Version:** 2.0 | March 2026
 
 ---
 
@@ -528,6 +528,7 @@ Items to consider for future versions:
 | 1.7 | March 2026 | Renamed all markers to dual-weight labels e.g. "(100% A1, 0% A2)"; fixed missing boundary markers in Charts 3 & 4 by widening filter to ±0.02 around w_A1=0 and w_A1=1; all marker helpers fully data-driven with no hardcoded r1/sd1/r2/sd2 params |
 | 1.8 | March 2026 | Added Max Sharpe, Max Return (Long Only), and Max Return (Leveraged) markers to all 4 frontier charts via _add_key_portfolio_markers helper; leveraged marker conditional on allow_short |
 | 1.9 | March 2026 | Verified and documented that all frontier chart markers and lines are fully data-driven; _add_key_portfolio_markers checks w_A1 against filtered df before plotting; CAL chart hardcoding confirmed intentional |
+| 2.0 | March 2026 | Added chart_region column to build_frontier() for strict marker ownership (boundaries w=0/w=1 belong to chart2 only); _add_key_portfolio_markers uses chart_region lookup instead of magic number ranges; weight_region retained for line coloring and boundary-widened df filtering |
 
 > **How to update:** Add a new row to this table whenever a design decision changes, noting what changed and why. Commit the updated `DESIGN.md` in the same pull request as the code change.
 
