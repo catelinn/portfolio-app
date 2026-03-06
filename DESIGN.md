@@ -402,7 +402,7 @@ Current ρ row highlighted. Lower ρ → lower MVP Std. Dev. → more diversific
 | Portfolio Std. Dev. | `σp = √(σ²p)` |
 | Sharpe Ratio | `SR = (E[Rp] − rf) / σp` |
 | CAL Exp. Return | `E[Rp] = rf + SR × σp` |
-| CAL Std. Dev. | `σp = |w| × σ_risky` |
+| CAL Std. Dev. | `σp = \|w\| σ_risky` |
 | MVP Weight (Asset 1) | `w* = (σ₂² − ρσ₁σ₂) / (σ₁² + σ₂² − 2ρσ₁σ₂)` |
 
 ### 8.3 DataFrame Columns
