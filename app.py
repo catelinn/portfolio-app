@@ -146,15 +146,32 @@ st.markdown("""
         color: #1F4E79;
         margin-bottom: 1rem;
     }
-    .warn-box {
-        background: #FFF8E7;
-        border-left: 4px solid #E8A020;
-        border-radius: 4px;
-        padding: 10px 14px;
-        font-size: 0.85rem;
-        color: #7B4F00;
-        margin-bottom: 1rem;
+    /* Styled parameter expander headers */
+    details[data-testid="stExpander"] > summary {
+        background-color: #1F4E79;
+        color: white !important;
+        border-radius: 6px;
+        padding: 10px 16px;
+        font-weight: 600;
+        font-size: 0.9rem;
     }
+    details[data-testid="stExpander"] > summary:hover {
+        background-color: #16375A;
+    }
+    details[data-testid="stExpander"] > summary svg {
+        fill: white !important;
+        stroke: white !important;
+    }
+    details[data-testid="stExpander"][open] > summary {
+        border-radius: 6px 6px 0 0;
+    }
+    details[data-testid="stExpander"] > div {
+        border: 1px solid #1F4E79;
+        border-top: none;
+        border-radius: 0 0 6px 6px;
+        padding: 12px;
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -319,7 +336,7 @@ tab1, tab2, tab3 = st.tabs([
 with tab1:
 
     # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
-    with st.expander("⚙️ Parameters — Portfolio Frontier", expanded=False):
+    with st.expander("⚙️ Parameters — Portfolio Frontier  (shared with Correlation Effect)", expanded=False):
         pc1, pc2, pc3 = st.columns(3)
         with pc1:
             st.markdown("**Asset 1**")
@@ -600,7 +617,7 @@ with tab1:
 with tab2:
 
     # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
-    with st.expander("⚙️ Parameters — Correlation Effect", expanded=False):
+    with st.expander("⚙️ Parameters — Correlation Effect  (shared with Portfolio Frontier)", expanded=False):
         rc1, rc2, rc3 = st.columns(3)
         with rc1:
             st.markdown("**Asset 1**")
