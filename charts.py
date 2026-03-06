@@ -185,6 +185,41 @@ def _add_dominated_line(fig, frontier_df):
     return fig
 
 
+def _add_extreme_markers(fig, frontier_df, r1, sd1, r2, sd2):
+    """Add markers for 200% Asset 1 (w_A1=2) and 200% Asset 2 (w_A2=2, w_A1=-1)."""
+    # 200% Asset 1: w_A1=2, w_A2=-1
+    df_200a1 = frontier_df[frontier_df["w_A1"].between(1.95, 2.05)]
+    if not df_200a1.empty:
+        row = df_200a1.iloc[0]
+        fig.add_trace(go.Scatter(
+            x=[row["sd"]], y=[row["ret"]], mode="markers+text",
+            marker=dict(size=9, color=COLORS["navy"], symbol="diamond-open",
+                        line=dict(width=2, color=COLORS["navy"])),
+            text=["200% Asset 1"], textposition="bottom right",
+            textfont=dict(size=10, color=COLORS["navy"]),
+            name="200% Asset 1",
+            customdata=[[REGION_LABELS.get("long_A1",""), 200.0, -100.0, row["sharpe"]]],
+            hovertemplate=_hover_frontier(),
+            showlegend=True,
+        ))
+    # 200% Asset 2: w_A2=2, w_A1=-1
+    df_200a2 = frontier_df[frontier_df["w_A1"].between(-1.05, -0.95)]
+    if not df_200a2.empty:
+        row = df_200a2.iloc[0]
+        fig.add_trace(go.Scatter(
+            x=[row["sd"]], y=[row["ret"]], mode="markers+text",
+            marker=dict(size=9, color=COLORS["amber"], symbol="diamond-open",
+                        line=dict(width=2, color=COLORS["amber"])),
+            text=["200% Asset 2"], textposition="bottom right",
+            textfont=dict(size=10, color=COLORS["amber"]),
+            name="200% Asset 2",
+            customdata=[[REGION_LABELS.get("short_A1",""), -100.0, 200.0, row["sharpe"]]],
+            hovertemplate=_hover_frontier(),
+            showlegend=True,
+        ))
+    return fig
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 1 — PORTFOLIO FRONTIER CHARTS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -192,22 +227,25 @@ def _add_dominated_line(fig, frontier_df):
 def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
     """
     Chart 1 — All Allocations (full frontier, requires short-selling ON).
-    Shows the complete hyperbola from w=-100% to w=+200%.
+    Shows efficient + dominated across the full hyperbola (w=-100% to w=+200%).
     """
     fig = go.Figure()
 
-    region_order = ["efficient", "dominated", "short_A1", "long_A1"]
-    for region in region_order:
-        df_r = frontier_df[frontier_df["region"] == region].sort_values("sd")
+    for region in ["efficient", "dominated"]:
+        df_r = frontier_df[frontier_df["region"] == region].sort_values("w_A1", ascending=False)
         if df_r.empty:
             continue
         fig.add_trace(go.Scatter(
             x=df_r["sd"], y=df_r["ret"],
             mode="lines",
-            name=REGION_LABELS.get(region, region),
-            line=dict(color=COLORS.get(region, COLORS["blue"]), width=2.5),
+            name=REGION_LABELS[region],
+            line=dict(
+                color=COLORS[region],
+                width=3 if region == "efficient" else 2,
+                dash="solid" if region == "efficient" else "dash",
+            ),
             customdata=list(zip(
-                [REGION_LABELS.get(region, region)] * len(df_r),
+                [REGION_LABELS[region]] * len(df_r),
                 df_r["w_A1"] * 100,
                 df_r["w_A2"] * 100,
                 df_r["sharpe"],
@@ -215,9 +253,9 @@ def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
             hovertemplate=_hover_frontier(),
         ))
 
-    fig = _add_dominated_line(fig, frontier_df)
     fig = _add_mvp_marker(fig, mvp)
     fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
+    fig = _add_extreme_markers(fig, frontier_df, r1, sd1, r2, sd2)
 
     fig.update_layout(_base_layout(
         title="Portfolio Frontier — All Allocations",
@@ -230,7 +268,7 @@ def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
 
 def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
     """
-    Chart 2 — long positions only (always visible).
+    Chart 2 — Long Only (always visible).
     Upper portion = efficient frontier. Lower portion = dominated.
     """
     fig = go.Figure()
@@ -281,19 +319,26 @@ def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
 def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
     """
     Chart 3 — Short Asset 1 / Long Asset 2 (requires short-selling ON).
-    Region where w_A1 < 0. Dominated only when r2 < r1 (Asset 2 lower return).
+    Shows efficient + dominated across full frontier. w_A1 < 0 region may be
+    dominated (when r2 < r1) or efficient (when r2 > r1).
     """
-    df_r = frontier_df[frontier_df["region"] == "short_A1"].sort_values("sd")
-    fig  = go.Figure()
+    fig = go.Figure()
 
-    if not df_r.empty:
+    for region in ["efficient", "dominated"]:
+        df_r = frontier_df[frontier_df["region"] == region].sort_values("w_A1", ascending=False)
+        if df_r.empty:
+            continue
         fig.add_trace(go.Scatter(
             x=df_r["sd"], y=df_r["ret"],
             mode="lines",
-            name="Short Asset 1 / Long Asset 2",
-            line=dict(color=COLORS["short_A1"], width=2.5),
+            name=REGION_LABELS[region],
+            line=dict(
+                color=COLORS[region],
+                width=3 if region == "efficient" else 2,
+                dash="solid" if region == "efficient" else "dash",
+            ),
             customdata=list(zip(
-                ["Short Asset 1 / Long Asset 2"] * len(df_r),
+                [REGION_LABELS[region]] * len(df_r),
                 df_r["w_A1"] * 100,
                 df_r["w_A2"] * 100,
                 df_r["sharpe"],
@@ -301,8 +346,8 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
             hovertemplate=_hover_frontier(),
         ))
 
-    fig = _add_dominated_line(fig, frontier_df)
     fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
+    fig = _add_extreme_markers(fig, frontier_df, r1, sd1, r2, sd2)
 
     # Dynamic annotation — only show if this region is actually dominated
     if r2 < r1:
@@ -327,19 +372,26 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
 def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
     """
     Chart 4 — Long Asset 1 / Short Asset 2 (requires short-selling ON).
-    Region where w_A1 > 1. Dominated only when r1 < r2 (default case).
+    Shows efficient + dominated across full frontier. w_A1 > 1 region is
+    typically dominated (when r1 < r2) but may be efficient if r1 > r2.
     """
-    df_r = frontier_df[frontier_df["region"] == "long_A1"].sort_values("sd")
-    fig  = go.Figure()
+    fig = go.Figure()
 
-    if not df_r.empty:
+    for region in ["efficient", "dominated"]:
+        df_r = frontier_df[frontier_df["region"] == region].sort_values("w_A1", ascending=False)
+        if df_r.empty:
+            continue
         fig.add_trace(go.Scatter(
             x=df_r["sd"], y=df_r["ret"],
             mode="lines",
-            name="Long Asset 1 / Short Asset 2",
-            line=dict(color=COLORS["long_A1"], width=2.5, dash="dash"),
+            name=REGION_LABELS[region],
+            line=dict(
+                color=COLORS[region],
+                width=3 if region == "efficient" else 2,
+                dash="solid" if region == "efficient" else "dash",
+            ),
             customdata=list(zip(
-                ["Long Asset 1 / Short Asset 2"] * len(df_r),
+                [REGION_LABELS[region]] * len(df_r),
                 df_r["w_A1"] * 100,
                 df_r["w_A2"] * 100,
                 df_r["sharpe"],
@@ -347,8 +399,8 @@ def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
             hovertemplate=_hover_frontier(),
         ))
 
-    fig = _add_dominated_line(fig, frontier_df)
     fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
+    fig = _add_extreme_markers(fig, frontier_df, r1, sd1, r2, sd2)
 
     # Dynamic annotation — only show if this region is actually dominated
     if r1 < r2:
@@ -585,11 +637,6 @@ def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2):
     Tab 3 Chart 1 — Overlaid efficient frontiers for 5 correlation values.
     Current ρ is shown with thicker line and full opacity.
     All others are dashed with reduced opacity.
-
-    Parameters
-    ----------
-    rho_frontiers : dict  {rho: DataFrame}  from build_rho_frontiers()
-    current_rho   : float  currently selected ρ value
     """
     fig = go.Figure()
 
@@ -619,10 +666,8 @@ def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2):
             hovertemplate=_hover_frontier(),
         ))
 
-    # Asset endpoint markers
     fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
 
-    # Note about long-only
     fig.add_annotation(
         text="Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)",
         xref="paper", yref="paper", x=0.0, y=-0.12,
@@ -643,10 +688,6 @@ def chart_rho_mvp_table(rho_mvp_df):
     """
     Tab 3 Chart 2 — MVP comparison table as a Plotly table figure.
     Highlights the current ρ row.
-
-    Parameters
-    ----------
-    rho_mvp_df : pd.DataFrame  from rho_mvp_table() in calculations.py
     """
     display_df = rho_mvp_df.drop(columns=["is_current"]).copy()
     display_df["Correlation (ρ)"] = rho_mvp_df.apply(
@@ -655,11 +696,10 @@ def chart_rho_mvp_table(rho_mvp_df):
         axis=1
     )
 
-    # Row colours
     fill_colors = []
     for _, row in rho_mvp_df.iterrows():
         if row["is_current"]:
-            fill_colors.append("#C6EFCE")   # light green for current
+            fill_colors.append("#C6EFCE")
         else:
             fill_colors.append("#F8F9FA")
 
@@ -700,20 +740,13 @@ def chart_rho_mvp_table(rho_mvp_df):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def chart_frontier_summary_table(summary_df):
-    """
-    Render the frontier summary table (bottom of Tab 1) as a Plotly table.
-
-    Parameters
-    ----------
-    summary_df : pd.DataFrame  from frontier_summary_table() in calculations.py
-    """
+    """Render the frontier summary table (bottom of Tab 1) as a Plotly table."""
     n_cols = len(summary_df.columns)
 
-    # Highlight special portfolios
     fill_colors = []
     for _, row in summary_df.iterrows():
         if "⭐" in str(row.get("Portfolio", "")):
-            fill_colors.append("#FFF3CD")   # amber tint for optimal portfolios
+            fill_colors.append("#FFF3CD")
         else:
             fill_colors.append("#F8F9FA")
 
@@ -748,22 +781,16 @@ def chart_frontier_summary_table(summary_df):
 
 
 def chart_cal_summary_table(cal_summary_df):
-    """
-    Render the CAL summary table (bottom of Tab 2) as a Plotly table.
-
-    Parameters
-    ----------
-    cal_summary_df : pd.DataFrame  from cal_summary_table() in calculations.py
-    """
+    """Render the CAL summary table (bottom of Tab 2) as a Plotly table."""
     n_cols = len(cal_summary_df.columns)
 
     fill_colors = []
     for _, row in cal_summary_df.iterrows():
         region = str(row.get("Region", ""))
         if "Leverage" in region:
-            fill_colors.append("#FDE8E8")   # red tint for leverage
+            fill_colors.append("#FDE8E8")
         elif "Short" in region:
-            fill_colors.append("#EDE7F6")   # violet tint for short
+            fill_colors.append("#EDE7F6")
         else:
             fill_colors.append("#F8F9FA")
 
