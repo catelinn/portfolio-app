@@ -228,7 +228,7 @@ def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
     return fig
 
 
-def chart_frontier_efficient_dominated(frontier_df, r1, sd1, r2, sd2, mvp):
+def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
     """
     Chart 2 — Efficient vs Dominated (long-only, always visible).
     Upper portion = efficient frontier. Lower portion = dominated.

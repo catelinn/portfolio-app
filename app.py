@@ -19,7 +19,7 @@ from calculations import (
 )
 from charts import (
     chart_frontier_all,
-    chart_frontier_efficient_dominated,
+    chart_frontier_long_only,
     chart_frontier_short_A1,
     chart_frontier_long_A1,
     chart_cal_all,
@@ -534,7 +534,7 @@ with tab1:
             )
         with row1_c2:
             st.plotly_chart(
-                chart_frontier_efficient_dominated(
+                chart_frontier_long_only(
                     frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp),
                 use_container_width=True, key="f_effdom"
             )
@@ -552,7 +552,7 @@ with tab1:
     else:
         # Single chart — efficient vs dominated only
         st.plotly_chart(
-            chart_frontier_efficient_dominated(
+            chart_frontier_long_only(
                 frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp),
             use_container_width=True, key="f_effdom_only"
         )
