@@ -308,8 +308,8 @@ st.markdown(
 
 tab1, tab2, tab3 = st.tabs([
     "📊  Portfolio Frontier",
-    "📈  Capital Allocation Line",
     "🔗  Correlation Effect",
+    "📈  Capital Allocation Line",
 ])
 
 
@@ -595,9 +595,93 @@ with tab1:
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# TAB 2 — CAPITAL ALLOCATION LINE
+# TAB 2 — CORRELATION EFFECT
 # ────────────────────────────────────────────────────────────────────────────
 with tab2:
+
+    # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
+    with st.expander("⚙️ Parameters — Correlation Effect", expanded=False):
+        rc1, rc2, rc3 = st.columns(3)
+        with rc1:
+            st.markdown("**Asset 1**")
+            f_r1  = st.slider("Exp. Return (%)",  0.0, 25.0, st.session_state.f_r1,  0.5, key="rho_f_r1",  on_change=lambda: st.session_state.update(f_r1=st.session_state.rho_f_r1))
+            f_sd1 = st.slider("Std. Dev. (%)",    5.0, 60.0, st.session_state.f_sd1, 1.0, key="rho_f_sd1", on_change=lambda: st.session_state.update(f_sd1=st.session_state.rho_f_sd1))
+        with rc2:
+            st.markdown("**Asset 2 (more risky)**")
+            f_r2  = st.slider("Exp. Return (%) ", 0.0, 30.0, _val("f_r2"),  0.5, key="rho_f_r2",  on_change=lambda: st.session_state.update(f_r2=st.session_state.rho_f_r2))
+            f_sd2 = st.slider("Std. Dev. (%)  ",  _val("f_sd1")+1, 80.0, _val("f_sd2"), 1.0, key="rho_f_sd2", on_change=lambda: st.session_state.update(f_sd2=st.session_state.rho_f_sd2))
+        with rc3:
+            st.markdown("**Correlation & Risk-Free Rate**")
+            f_rho = st.slider("Correlation (ρ)",   -1.0, 1.0,  st.session_state.f_rho, 0.1, key="rho_f_rho", on_change=lambda: st.session_state.update(f_rho=st.session_state.rho_f_rho))
+            f_rf  = st.slider("Risk-Free Rate (%)", 0.0, 10.0, st.session_state.f_rf,  0.5, key="rho_f_rf",  on_change=lambda: st.session_state.update(f_rf=st.session_state.rho_f_rf))
+
+    # ── Compute with latest params ──────────────────────────────────────────
+    _r = compute_rho()
+    rho_frontiers = _r["rho_frontiers"]
+    rho_mvp_df    = _r["rho_mvp_df"]
+    f_r1, f_sd1   = _r["f_r1"], _r["f_sd1"]
+    f_r2, f_sd2   = _r["f_r2"], _r["f_sd2"]
+    f_rho, f_rf   = _r["f_rho"], _r["f_rf"]
+
+    st.markdown(
+        "<div class='info-box'>"
+        "ℹ️ Correlation frontiers are always displayed as long-only "
+        "(Asset 1 & Asset 2 Weights: 0% → 100%) regardless of the short-selling setting. "
+        "This is consistent with how Prof. Weisbenner presents correlation effects in Lesson 1-5."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── METRICS ──────────────────────────────────────────────────────────────
+    st.markdown("#### Correlation Metrics")
+
+    mvp_sd_neg1 = rho_mvp_sd(f_sd1, f_sd2, -1.0)
+    mvp_sd_zero = rho_mvp_sd(f_sd1, f_sd2,  0.0)
+    mvp_sd_pos1 = rho_mvp_sd(f_sd1, f_sd2,  1.0)
+    mvp_sd_curr = rho_mvp_sd(f_sd1, f_sd2,  f_rho)
+
+    r1, r2, r3, r4 = st.columns(4)
+    r1.metric("Current ρ",              f"{f_rho:.1f}")
+    r2.metric("MVP Std. Dev. at ρ=−1",  f"{mvp_sd_neg1:.2f}%",
+              help="Lowest achievable risk — perfect negative correlation")
+    r3.metric("MVP Std. Dev. at ρ=0",   f"{mvp_sd_zero:.2f}%",
+              help="Risk at zero correlation")
+    r4.metric("MVP Std. Dev. at ρ=+1",  f"{mvp_sd_pos1:.2f}%",
+              help="No diversification benefit — assets move in lockstep")
+
+    # Diversification benefit vs ρ=0
+    benefit = mvp_sd_zero - mvp_sd_curr
+    st.metric(
+        f"Diversification Benefit vs ρ=0 (current ρ={f_rho:.1f})",
+        f"σ reduced by {benefit:.2f}%",
+        help="How much the current correlation reduces MVP Std. Dev. vs zero correlation",
+    )
+
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+    # ── CHARTS ───────────────────────────────────────────────────────────────
+    st.markdown("#### Effect of Correlation on the Efficient Frontier")
+    st.plotly_chart(
+        chart_rho_effect(rho_frontiers, f_rho, f_r1, f_sd1, f_r2, f_sd2),
+        use_container_width=True, key="rho_chart"
+    )
+
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+    st.markdown("#### Min. Variance Portfolio — Comparison Across Correlations")
+    st.plotly_chart(
+        chart_rho_mvp_table(rho_mvp_df),
+        use_container_width=True, key="rho_mvp_tbl"
+    )
+
+    st.caption(
+        "💡 Assignment 1: Set ρ = −0.8 using the sidebar slider. "
+        "Notice how MVP Std. Dev. drops dramatically — "
+        "lower correlation means more diversification benefit."
+    )
+# TAB 3 — CAPITAL ALLOCATION LINE
+# ────────────────────────────────────────────────────────────────────────────
+with tab3:
 
     # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
     with st.expander("⚙️ Parameters — Capital Allocation Line", expanded=False):
@@ -803,87 +887,3 @@ with tab2:
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# TAB 3 — CORRELATION EFFECT
-# ────────────────────────────────────────────────────────────────────────────
-with tab3:
-
-    # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
-    with st.expander("⚙️ Parameters — Correlation Effect", expanded=False):
-        rc1, rc2, rc3 = st.columns(3)
-        with rc1:
-            st.markdown("**Asset 1**")
-            f_r1  = st.slider("Exp. Return (%)",  0.0, 25.0, st.session_state.f_r1,  0.5, key="rho_f_r1",  on_change=lambda: st.session_state.update(f_r1=st.session_state.rho_f_r1))
-            f_sd1 = st.slider("Std. Dev. (%)",    5.0, 60.0, st.session_state.f_sd1, 1.0, key="rho_f_sd1", on_change=lambda: st.session_state.update(f_sd1=st.session_state.rho_f_sd1))
-        with rc2:
-            st.markdown("**Asset 2 (more risky)**")
-            f_r2  = st.slider("Exp. Return (%) ", 0.0, 30.0, _val("f_r2"),  0.5, key="rho_f_r2",  on_change=lambda: st.session_state.update(f_r2=st.session_state.rho_f_r2))
-            f_sd2 = st.slider("Std. Dev. (%)  ",  _val("f_sd1")+1, 80.0, _val("f_sd2"), 1.0, key="rho_f_sd2", on_change=lambda: st.session_state.update(f_sd2=st.session_state.rho_f_sd2))
-        with rc3:
-            st.markdown("**Correlation & Risk-Free Rate**")
-            f_rho = st.slider("Correlation (ρ)",   -1.0, 1.0,  st.session_state.f_rho, 0.1, key="rho_f_rho", on_change=lambda: st.session_state.update(f_rho=st.session_state.rho_f_rho))
-            f_rf  = st.slider("Risk-Free Rate (%)", 0.0, 10.0, st.session_state.f_rf,  0.5, key="rho_f_rf",  on_change=lambda: st.session_state.update(f_rf=st.session_state.rho_f_rf))
-
-    # ── Compute with latest params ──────────────────────────────────────────
-    _r = compute_rho()
-    rho_frontiers = _r["rho_frontiers"]
-    rho_mvp_df    = _r["rho_mvp_df"]
-    f_r1, f_sd1   = _r["f_r1"], _r["f_sd1"]
-    f_r2, f_sd2   = _r["f_r2"], _r["f_sd2"]
-    f_rho, f_rf   = _r["f_rho"], _r["f_rf"]
-
-    st.markdown(
-        "<div class='info-box'>"
-        "ℹ️ Correlation frontiers are always displayed as long-only "
-        "(Asset 1 & Asset 2 Weights: 0% → 100%) regardless of the short-selling setting. "
-        "This is consistent with how Prof. Weisbenner presents correlation effects in Lesson 1-5."
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-    # ── METRICS ──────────────────────────────────────────────────────────────
-    st.markdown("#### Correlation Metrics")
-
-    mvp_sd_neg1 = rho_mvp_sd(f_sd1, f_sd2, -1.0)
-    mvp_sd_zero = rho_mvp_sd(f_sd1, f_sd2,  0.0)
-    mvp_sd_pos1 = rho_mvp_sd(f_sd1, f_sd2,  1.0)
-    mvp_sd_curr = rho_mvp_sd(f_sd1, f_sd2,  f_rho)
-
-    r1, r2, r3, r4 = st.columns(4)
-    r1.metric("Current ρ",              f"{f_rho:.1f}")
-    r2.metric("MVP Std. Dev. at ρ=−1",  f"{mvp_sd_neg1:.2f}%",
-              help="Lowest achievable risk — perfect negative correlation")
-    r3.metric("MVP Std. Dev. at ρ=0",   f"{mvp_sd_zero:.2f}%",
-              help="Risk at zero correlation")
-    r4.metric("MVP Std. Dev. at ρ=+1",  f"{mvp_sd_pos1:.2f}%",
-              help="No diversification benefit — assets move in lockstep")
-
-    # Diversification benefit vs ρ=0
-    benefit = mvp_sd_zero - mvp_sd_curr
-    st.metric(
-        f"Diversification Benefit vs ρ=0 (current ρ={f_rho:.1f})",
-        f"σ reduced by {benefit:.2f}%",
-        help="How much the current correlation reduces MVP Std. Dev. vs zero correlation",
-    )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── CHARTS ───────────────────────────────────────────────────────────────
-    st.markdown("#### Effect of Correlation on the Efficient Frontier")
-    st.plotly_chart(
-        chart_rho_effect(rho_frontiers, f_rho, f_r1, f_sd1, f_r2, f_sd2),
-        use_container_width=True, key="rho_chart"
-    )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    st.markdown("#### Min. Variance Portfolio — Comparison Across Correlations")
-    st.plotly_chart(
-        chart_rho_mvp_table(rho_mvp_df),
-        use_container_width=True, key="rho_mvp_tbl"
-    )
-
-    st.caption(
-        "💡 Assignment 1: Set ρ = −0.8 using the sidebar slider. "
-        "Notice how MVP Std. Dev. drops dramatically — "
-        "lower correlation means more diversification benefit."
-    )
