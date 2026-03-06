@@ -159,7 +159,9 @@ def build_frontier(r1, sd1, r2, sd2, rho, rf,
 
     df["region"] = df.apply(assign_region, axis=1)
 
-    # Separate weight-range column for Chart 1 coloring
+    # weight_region: Chart 1 coloring — each row belongs to one of 3 segments
+    # Boundary points (w=0, w=1) belong to long_only (Chart 2), not to
+    # short_A1 (Chart 3) or long_A1 (Chart 4).
     def assign_weight_region(row):
         w = row["w_A1"]
         if w < 0:
@@ -170,6 +172,21 @@ def build_frontier(r1, sd1, r2, sd2, rho, rf,
             return "long_only"
 
     df["weight_region"] = df.apply(assign_weight_region, axis=1)
+
+    # chart_region: strict ownership per chart — used by key portfolio marker
+    # checks to decide which chart a portfolio belongs to.
+    # Boundaries (w=0, w=1) belong exclusively to long_only (Chart 2).
+    # chart3 = strictly w < 0; chart4 = strictly w > 1.
+    def assign_chart_region(row):
+        w = row["w_A1"]
+        if w < 0:
+            return "chart3"
+        elif w > 1:
+            return "chart4"
+        else:
+            return "chart2"
+
+    df["chart_region"] = df.apply(assign_chart_region, axis=1)
     return df
 
 
