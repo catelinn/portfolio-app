@@ -764,7 +764,7 @@ with tab2:
                     <span class='opt-card-value'>E[R]={c_rf:.1f}%, σ=0%</span>
                 </div>
                 <div class='opt-card-row'>
-                    <span>w = 0.5</span>
+                    <span>50% Risky (w=0.5)</span>
                     <span class='opt-card-value'>
                         E[R]={0.5*c_r_risky + 0.5*c_rf:.2f}%,
                         σ={0.5*c_sd_risky:.2f}%
@@ -775,14 +775,14 @@ with tab2:
                     <span class='opt-card-value'>E[R]={c_r_risky:.1f}%, σ={c_sd_risky:.1f}%</span>
                 </div>
                 <div class='opt-card-row'>
-                    <span>w = 1.5 (leverage)</span>
+                    <span>150% Risky Asset (w=1.5) — Leverage</span>
                     <span class='opt-card-value'>
                         E[R]={1.5*c_r_risky - 0.5*c_rf:.2f}%,
                         σ={1.5*c_sd_risky:.2f}%
                     </span>
                 </div>
                 <div class='opt-card-row'>
-                    <span>w = 2 (leverage)</span>
+                    <span>200% Risky Asset (w=2) — Leverage</span>
                     <span class='opt-card-value'>
                         E[R]={2*c_r_risky - c_rf:.2f}%,
                         σ={2*c_sd_risky:.2f}%
