@@ -1,792 +1,524 @@
-"""
-app.py
-------
-Main Streamlit application — wires sidebar, calculations, and charts together.
-
-FIN 511 - Investments I: Module 1, Lesson 1-5
-Run with: streamlit run app.py
-"""
-
-import streamlit as st
-import pandas as pd
-
-from calculations import (
-    build_frontier, build_cal, build_rho_frontiers,
-    find_mvp, find_max_sharpe, find_max_return,
-    efficient_frontier_region, benchmark_stats,
-    frontier_summary_table, cal_summary_table,
-    rho_mvp_table, cal_equation_str, rho_mvp_sd,
-)
-from charts import (
-    chart_frontier_all,
-    chart_frontier_efficient_dominated,
-    chart_frontier_short_A1,
-    chart_frontier_long_A1,
-    chart_cal_all,
-    chart_cal_all_long,
-    chart_cal_long_no_leverage,
-    chart_cal_long_with_leverage,
-    chart_rho_effect,
-    chart_rho_mvp_table,
-    chart_frontier_summary_table,
-    chart_cal_summary_table,
-)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PAGE CONFIG
-# ══════════════════════════════════════════════════════════════════════════════
-
-st.set_page_config(
-    page_title="Portfolio Frontier & CAL Explorer",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-# ── Custom CSS ─────────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-    /* Main header */
-    .main-header {
-        font-size: 1.6rem;
-        font-weight: 800;
-        color: #1F4E79;
-        margin-bottom: 0.1rem;
-    }
-    .main-subtitle {
-        font-size: 0.9rem;
-        color: #595959;
-        margin-bottom: 1.2rem;
-    }
-
-    /* Metric cards */
-    div[data-testid="metric-container"] {
-        background: #F2F7FC;
-        border: 1px solid #BDD7EE;
-        border-radius: 8px;
-        padding: 12px 16px;
-    }
-
-    /* Section headers in sidebar */
-    .sidebar-section {
-        font-size: 0.78rem;
-        font-weight: 700;
-        color: #1F4E79;
-        text-transform: uppercase;
-        letter-spacing: 1.2px;
-        margin-top: 1rem;
-        margin-bottom: 0.3rem;
-        padding-bottom: 4px;
-        border-bottom: 2px solid #BDD7EE;
-    }
-
-    /* Optimal portfolio card */
-    .opt-card {
-        background: #F0F7F0;
-        border: 1px solid #C6EFCE;
-        border-left: 4px solid #1E6B3A;
-        border-radius: 6px;
-        padding: 10px 14px;
-        margin-bottom: 8px;
-        font-size: 0.85rem;
-    }
-    .opt-card-title {
-        font-weight: 700;
-        color: #1E6B3A;
-        font-size: 0.88rem;
-        margin-bottom: 6px;
-    }
-    .opt-card-row {
-        display: flex;
-        justify-content: space-between;
-        color: #333;
-        margin-bottom: 2px;
-    }
-    .opt-card-value {
-        font-weight: 600;
-        color: #1E6B3A;
-        font-family: monospace;
-    }
-
-    /* Efficient frontier region card */
-    .eff-region-card {
-        background: #EBF3FB;
-        border: 1px solid #BDD7EE;
-        border-left: 4px solid #2E75B6;
-        border-radius: 6px;
-        padding: 12px 16px;
-        margin-top: 8px;
-        font-size: 0.85rem;
-    }
-    .eff-region-title {
-        font-weight: 700;
-        color: #1F4E79;
-        margin-bottom: 8px;
-        font-size: 0.9rem;
-    }
-
-    /* Dividers */
-    .section-divider {
-        border: none;
-        border-top: 1px solid #E0E0E0;
-        margin: 1.2rem 0;
-    }
-
-    /* Tab content top padding */
-    .tab-content { padding-top: 0.5rem; }
-
-    /* Info/warning boxes */
-    .info-box {
-        background: #EBF3FB;
-        border-left: 4px solid #2E75B6;
-        border-radius: 4px;
-        padding: 10px 14px;
-        font-size: 0.85rem;
-        color: #1F4E79;
-        margin-bottom: 1rem;
-    }
-    .warn-box {
-        background: #FFF8E7;
-        border-left: 4px solid #E8A020;
-        border-radius: 4px;
-        padding: 10px 14px;
-        font-size: 0.85rem;
-        color: #7B4F00;
-        margin-bottom: 1rem;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# SESSION STATE — initialise defaults on first run
-# ══════════════════════════════════════════════════════════════════════════════
-
-DEFAULTS = dict(
-    f_r1=8.0, f_sd1=25.0,
-    f_r2=15.0, f_sd2=50.0,
-    f_rho=0.4, f_rf=3.0,
-    c_r_risky=8.0, c_sd_risky=25.0, c_rf=3.0,
-    allow_short=False,
-)
-
-for key, val in DEFAULTS.items():
-    if key not in st.session_state:
-        st.session_state[key] = val
-
-
-def apply_preset(preset):
-    for k, v in preset.items():
-        st.session_state[k] = v
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# SIDEBAR
-# ══════════════════════════════════════════════════════════════════════════════
-
-with st.sidebar:
-
-    st.markdown("## ⚙️ Controls")
-
-    # ── Short-selling toggle ───────────────────────────────────────────────
-    allow_short = st.checkbox(
-        "☐ Allow Short-Selling",
-        value=st.session_state.allow_short,
-        help="Enables short-selling (w < 0 or w > 1). Affects Tab 1 and Tab 2.",
-        key="allow_short",
-    )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── Presets ────────────────────────────────────────────────────────────
-    st.markdown("<div class='sidebar-section'>Quick Presets</div>",
-                unsafe_allow_html=True)
-
-    preset_cols = st.columns(2)
-    with preset_cols[0]:
-        if st.button("Default", use_container_width=True):
-            apply_preset(DEFAULTS)
-            st.rerun()
-        if st.button("ρ = 0", use_container_width=True):
-            apply_preset({**DEFAULTS, "f_rho": 0.0})
-            st.rerun()
-    with preset_cols[1]:
-        if st.button("Assignment 1\n(ρ = −0.8)", use_container_width=True):
-            apply_preset({**DEFAULTS, "f_rho": -0.8})
-            st.rerun()
-        if st.button("ρ = −1", use_container_width=True):
-            apply_preset({**DEFAULTS, "f_rho": -1.0})
-            st.rerun()
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── Portfolio Frontier parameters ──────────────────────────────────────
-    st.markdown("<div class='sidebar-section'>📊 Portfolio Frontier</div>",
-                unsafe_allow_html=True)
-
-    st.markdown("**Asset 1**")
-    f_r1 = st.slider("Exp. Return (%)",
-                     0.0, 25.0, st.session_state.f_r1, 0.5,
-                     key="f_r1")
-    f_sd1 = st.slider("Std. Dev. (%)",
-                      5.0, 60.0, st.session_state.f_sd1, 1.0,
-                      key="f_sd1")
-
-    st.markdown("**Asset 2**")
-    f_r2 = st.slider("Exp. Return (%) ",
-                     0.0, 30.0, st.session_state.f_r2, 0.5,
-                     key="f_r2")
-
-    # ── Validation: Asset 2 sd must be > Asset 1 sd ────────────────────────
-    sd2_min = f_sd1 + 1.0
-    sd2_val = max(st.session_state.f_sd2, sd2_min)
-
-    if st.session_state.f_sd2 < sd2_min:
-        st.info(
-            f"ℹ️ Asset 2 Std. Dev. adjusted to {sd2_val:.0f}% "
-            f"— must exceed Asset 1 Std. Dev. ({f_sd1:.0f}%)."
-        )
-
-    f_sd2 = st.slider(
-        "Std. Dev. (%)  ",
-        min_value=sd2_min,
-        max_value=80.0,
-        value=sd2_val,
-        step=1.0,
-        key="f_sd2",
-        help="Asset 2 must always be riskier than Asset 1.",
-    )
-
-    st.markdown("**Correlation & Risk-Free Rate**")
-    f_rho = st.slider("Correlation (ρ)",
-                      -1.0, 1.0, st.session_state.f_rho, 0.1,
-                      key="f_rho")
-    f_rf  = st.slider("Risk-Free Rate (%)",
-                      0.0, 10.0, st.session_state.f_rf, 0.5,
-                      key="f_rf",
-                      help="Used for Sharpe ratio calculation only.")
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── CAL parameters ─────────────────────────────────────────────────────
-    st.markdown("<div class='sidebar-section'>📈 Capital Allocation Line</div>",
-                unsafe_allow_html=True)
-
-    st.markdown("**Risky Asset**")
-    c_r_risky  = st.slider("Exp. Return (%)",
-                           0.0, 25.0, st.session_state.c_r_risky, 0.5,
-                           key="c_r_risky")
-    c_sd_risky = st.slider("Std. Dev. (%)",
-                           1.0, 60.0, st.session_state.c_sd_risky, 1.0,
-                           key="c_sd_risky")
-
-    st.markdown("**Risk-Free Asset**")
-    c_rf = st.slider("Risk-Free Rate (%)",
-                     0.0, 10.0, st.session_state.c_rf, 0.5,
-                     key="c_rf",
-                     help="T-Bill rate — zero std. dev. by definition.")
-    st.caption("📌 Risk-free asset: zero std. dev., zero correlation with risky asset.")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# COMPUTE — run all calculations with current params
-# ══════════════════════════════════════════════════════════════════════════════
-
-# Frontier
-frontier_df   = build_frontier(f_r1, f_sd1, f_r2, f_sd2, f_rho, f_rf)
-mvp           = find_mvp(frontier_df)
-max_sr        = find_max_sharpe(frontier_df, long_only=True)
-max_ret_lo    = find_max_return(frontier_df, long_only=True)
-max_ret_lev   = find_max_return(frontier_df, long_only=False)
-eff_df, eff_summary = efficient_frontier_region(frontier_df)
-benchmarks    = benchmark_stats(f_r1, f_sd1, f_r2, f_sd2, f_rho, f_rf)
-f_summary_tbl = frontier_summary_table(
-    frontier_df, f_r1, f_sd1, f_r2, f_sd2, f_rho, f_rf,
-    allow_short=allow_short,
-)
-
-# CAL
-cal_df        = build_cal(c_r_risky, c_sd_risky, c_rf)
-c_summary_tbl = cal_summary_table(c_r_risky, c_sd_risky, c_rf,
-                                   allow_short=allow_short)
-cal_eq_str    = cal_equation_str(c_r_risky, c_sd_risky, c_rf)
-cal_sharpe    = ((c_r_risky - c_rf) / c_sd_risky
-                 if c_sd_risky > 0 else 0.0)
-
-# Correlation
-rho_frontiers = build_rho_frontiers(f_r1, f_sd1, f_r2, f_sd2, f_rf)
-rho_mvp_df    = rho_mvp_table(f_r1, f_sd1, f_r2, f_sd2, f_rf,
-                               current_rho=f_rho)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# HEADER
-# ══════════════════════════════════════════════════════════════════════════════
-
-st.markdown(
-    "<div class='main-header'>📊 Portfolio Frontier & CAL Explorer</div>",
-    unsafe_allow_html=True,
-)
-st.markdown(
-    "<div class='main-subtitle'>"
-    "FIN 511 · Module 1 · Lesson 1-5 — Adjust sliders in the sidebar to update all charts live"
-    "</div>",
-    unsafe_allow_html=True,
-)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TABS
-# ══════════════════════════════════════════════════════════════════════════════
-
-tab1, tab2, tab3 = st.tabs([
-    "📊  Portfolio Frontier",
-    "📈  Capital Allocation Line",
-    "🔗  Correlation Effect",
-])
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 1 — PORTFOLIO FRONTIER
-# ────────────────────────────────────────────────────────────────────────────
-with tab1:
-
-    # ── Short-selling message ────────────────────────────────────────────────
-    if not allow_short:
-        st.markdown(
-            "<div class='info-box'>"
-            "ℹ️ <b>Short-selling is currently disabled.</b> "
-            "Only portfolios with Asset 1 Weight: 0%→100% and Asset 2 Weight: 0%→100% are shown. "
-            "This reflects the real-world constraint most investors face in 401k plans and "
-            "standard brokerage accounts. Enable short-selling in the sidebar to see the full "
-            "frontier including short-selling and leveraged allocations."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            "<div class='warn-box'>"
-            "⚠️ <b>Short-selling is enabled.</b> "
-            "Charts now show all allocations including: "
-            "Short Asset 1 / Long Asset 2 (Asset 1 Weight &lt; 0%) and "
-            "Long Asset 1 / Short Asset 2 (Asset 1 Weight &gt; 100%). "
-            "Note: Short-selling requires a margin account and involves borrowing costs "
-            "not reflected here (per Prof. Weisbenner, Lesson 1-2.5)."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-    # ── METRICS ROW 1 — Benchmark portfolios ────────────────────────────────
-    st.markdown("#### Benchmark Portfolios")
-
-    def benchmark_card(title, ret, sd, sharpe, border_color="#2E75B6"):
-        """Render a benchmark portfolio as a compact HTML card."""
-        return f"""
-        <div style="
-            background:#F8FBFF;
-            border:1px solid #BDD7EE;
-            border-top:4px solid {border_color};
-            border-radius:8px;
-            padding:14px 18px;
-            flex:1;
-        ">
-            <div style="font-weight:700;font-size:0.92rem;color:#1F4E79;
-                        margin-bottom:12px;">{title}</div>
-            <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
-                <tr>
-                    <td style="color:#595959;padding:3px 0;">Exp. Return</td>
-                    <td style="text-align:right;font-weight:700;
-                               font-family:monospace;color:#1F4E79;">
-                        {ret:.2f}%</td>
-                </tr>
-                <tr>
-                    <td style="color:#595959;padding:3px 0;">Std. Dev.</td>
-                    <td style="text-align:right;font-weight:700;
-                               font-family:monospace;color:#1F4E79;">
-                        {sd:.2f}%</td>
-                </tr>
-                <tr>
-                    <td style="color:#595959;padding:3px 0;">Sharpe Ratio</td>
-                    <td style="text-align:right;font-weight:700;
-                               font-family:monospace;color:#1F4E79;">
-                        {sharpe:.3f}</td>
-                </tr>
-            </table>
-        </div>"""
-
-    st.markdown(
-        f"""<div style="display:flex;gap:16px;margin-bottom:8px;">
-            {benchmark_card("100% Asset 1",
-                benchmarks['asset1']['ret'],
-                benchmarks['asset1']['sd'],
-                benchmarks['asset1']['sharpe'],
-                border_color="#1F4E79")}
-            {benchmark_card("100% Asset 2",
-                benchmarks['asset2']['ret'],
-                benchmarks['asset2']['sd'],
-                benchmarks['asset2']['sharpe'],
-                border_color="#E8A020")}
-            {benchmark_card("Equal Weight (50/50)",
-                benchmarks['equal']['ret'],
-                benchmarks['equal']['sd'],
-                benchmarks['equal']['sharpe'],
-                border_color="#1E6B3A")}
-        </div>""",
-        unsafe_allow_html=True,
-    )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── METRICS ROW 2 — Optimal portfolio cards ──────────────────────────────
-    st.markdown("#### Optimal Portfolios")
-
-    def opt_card(title, row, extra_note=""):
-        """Render a styled optimal portfolio card."""
-        st.markdown(f"""
-        <div class='opt-card'>
-            <div class='opt-card-title'>{title}</div>
-            <div class='opt-card-row'>
-                <span>Asset 1 Weight</span>
-                <span class='opt-card-value'>{row['w_A1']*100:.1f}%</span>
-            </div>
-            <div class='opt-card-row'>
-                <span>Asset 2 Weight</span>
-                <span class='opt-card-value'>{row['w_A2']*100:.1f}%</span>
-            </div>
-            <div class='opt-card-row'>
-                <span>Exp. Return</span>
-                <span class='opt-card-value'>{row['ret']:.2f}%</span>
-            </div>
-            <div class='opt-card-row'>
-                <span>Std. Dev.</span>
-                <span class='opt-card-value'>{row['sd']:.2f}%</span>
-            </div>
-            <div class='opt-card-row'>
-                <span>Sharpe Ratio</span>
-                <span class='opt-card-value'>{row['sharpe']:.3f}</span>
-            </div>
-            {"<div style='margin-top:6px;font-size:0.78rem;color:#595959'>" + extra_note + "</div>" if extra_note else ""}
-        </div>
-        """, unsafe_allow_html=True)
-
-    n_cards = 4 if allow_short else 3
-    card_cols = st.columns(n_cards)
-
-    with card_cols[0]:
-        opt_card("⭐ Min. Variance Portfolio", mvp,
-                 "Lowest achievable Std. Dev.")
-    with card_cols[1]:
-        opt_card("⭐ Max. Sharpe Portfolio", max_sr,
-                 "Highest risk-adjusted return (long-only)")
-    with card_cols[2]:
-        opt_card("⭐ Max. Return (Long Only)", max_ret_lo,
-                 "Asset 2 Weight = 100%")
-    if allow_short:
-        with card_cols[3]:
-            opt_card("⭐ Max. Return (Leveraged)", max_ret_lev,
-                     "Asset 2 Weight = 200% — requires short-selling")
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── METRICS ROW 3 — Efficient frontier region ────────────────────────────
-    st.markdown("#### 📊 Efficient Frontier Region")
-    st.caption(
-        "Long-only portfolios above the Min. Variance Portfolio "
-        "(Asset 1 Weight: 0%→100%, Exp. Return ≥ MVP Exp. Return) — "
-        "consistent with Prof. Weisbenner's Lesson 1-5."
-    )
-
-    if eff_summary:
-        # Row 1: weight ranges + peak sharpe (3 columns — less crowded)
-        e1, e2, e3 = st.columns(3)
-        e1.metric(
-            "Asset 1 Weight Range",
-            f"{eff_summary['w_A1_range'][0]*100:.0f}%",
-            f"→ {eff_summary['w_A1_range'][1]*100:.0f}%",
-            help="From MVP down to 100% Asset 2",
-        )
-        e2.metric(
-            "Asset 2 Weight Range",
-            f"{eff_summary['w_A2_range'][0]*100:.0f}%",
-            f"→ {eff_summary['w_A2_range'][1]*100:.0f}%",
-            help="From MVP up to 100% Asset 2",
-        )
-        e3.metric(
-            "Peak Sharpe Ratio",
-            f"{eff_summary['peak_sharpe']:.3f}",
-            help=(f"At Asset 1 Weight = {eff_summary['peak_w_A1']*100:.0f}%, "
-                  f"Asset 2 Weight = {eff_summary['peak_w_A2']*100:.0f}%"),
-        )
-
-        # Row 2: std dev range + return range + portfolio count
-        e4, e5, e6 = st.columns(3)
-        e4.metric(
-            "Std. Dev. Range",
-            f"{eff_summary['sd_range'][0]:.2f}%",
-            f"→ {eff_summary['sd_range'][1]:.2f}%",
-            help="From MVP (lowest) to 100% Asset 2 (highest)",
-        )
-        e5.metric(
-            "Exp. Return Range",
-            f"{eff_summary['ret_range'][0]:.2f}%",
-            f"→ {eff_summary['ret_range'][1]:.2f}%",
-            help="From MVP return up to 100% Asset 2 return",
-        )
-        e6.metric(
-            "Portfolios in Region",
-            f"{eff_summary['n_portfolios']}",
-            help="Number of long-only portfolio combinations above the MVP",
-        )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── CHARTS ───────────────────────────────────────────────────────────────
-    st.markdown("#### Charts")
-
-    if allow_short:
-        # 2x2 grid — all 4 charts
-        row1_c1, row1_c2 = st.columns(2)
-        with row1_c1:
-            st.plotly_chart(
-                chart_frontier_all(frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp),
-                use_container_width=True, key="f_all"
-            )
-        with row1_c2:
-            st.plotly_chart(
-                chart_frontier_efficient_dominated(
-                    frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp),
-                use_container_width=True, key="f_effdom"
-            )
-        row2_c1, row2_c2 = st.columns(2)
-        with row2_c1:
-            st.plotly_chart(
-                chart_frontier_short_A1(frontier_df, f_r1, f_sd1, f_r2, f_sd2),
-                use_container_width=True, key="f_shortA1"
-            )
-        with row2_c2:
-            st.plotly_chart(
-                chart_frontier_long_A1(frontier_df, f_r1, f_sd1, f_r2, f_sd2),
-                use_container_width=True, key="f_longA1"
-            )
-    else:
-        # Single chart — efficient vs dominated only
-        st.plotly_chart(
-            chart_frontier_efficient_dominated(
-                frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp),
-            use_container_width=True, key="f_effdom_only"
-        )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── SUMMARY TABLE ─────────────────────────────────────────────────────────
-    st.markdown("#### Portfolio Summary Table")
-    st.plotly_chart(
-        chart_frontier_summary_table(f_summary_tbl),
-        use_container_width=True, key="f_summary_tbl"
-    )
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 2 — CAPITAL ALLOCATION LINE
-# ────────────────────────────────────────────────────────────────────────────
-with tab2:
-
-    # ── Short-selling message ────────────────────────────────────────────────
-    if not allow_short:
-        st.markdown(
-            "<div class='info-box'>"
-            "ℹ️ <b>Short-selling disabled.</b> "
-            "CAL shown for long positions only (Risky Asset Weight ≥ 0%). "
-            "The 'All Allocations' chart — which includes Risky Asset Weight &lt; 0% "
-            "(shorting the risky asset to put more than 100% into T-Bills) — is hidden."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            "<div class='warn-box'>"
-            "⚠️ <b>Short-selling enabled.</b> "
-            "'All Allocations' chart now includes Risky Asset Weight &lt; 0%: "
-            "shorting the risky asset to invest more than 100% in T-Bills. "
-            "Note: Sharpe ratio is negative in this region — "
-            "you earn less than the risk-free rate."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-    # ── METRICS ──────────────────────────────────────────────────────────────
-    st.markdown("#### CAL Metrics")
-
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("Sharpe Ratio",    f"{cal_sharpe:.3f}")
-    m2.metric("Risk-Free Rate",  f"{c_rf:.1f}%",
-              help="Intercept of the CAL — 100% T-Bills")
-    m3.metric("100% Risky",
-              f"E[R]={c_r_risky:.1f}%  σ={c_sd_risky:.1f}%")
-    m4.metric("w=2 (Leverage)",
-              f"E[R]={2*c_r_risky - c_rf:.1f}%  σ={2*c_sd_risky:.1f}%",
-              help="Borrow 100% of portfolio value at rf to double risky exposure")
-    m5.metric("CAL Equation", cal_eq_str)
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── CHARTS ───────────────────────────────────────────────────────────────
-    st.markdown("#### Charts")
-
-    if allow_short:
-        # Chart 1: All Allocations (short-selling ON only)
-        st.plotly_chart(
-            chart_cal_all(cal_df, c_r_risky, c_sd_risky, c_rf),
-            use_container_width=True, key="c_all"
-        )
-
-    # Chart 2: All Long (always visible)
-    st.plotly_chart(
-        chart_cal_all_long(cal_df, c_r_risky, c_sd_risky, c_rf),
-        use_container_width=True, key="c_all_long"
-    )
-
-    # Charts 3 & 4 side by side
-    c_col1, c_col2 = st.columns(2)
-    with c_col1:
-        st.plotly_chart(
-            chart_cal_long_no_leverage(cal_df, c_r_risky, c_sd_risky, c_rf),
-            use_container_width=True, key="c_no_lev"
-        )
-    with c_col2:
-        st.plotly_chart(
-            chart_cal_long_with_leverage(cal_df, c_r_risky, c_sd_risky, c_rf),
-            use_container_width=True, key="c_lev"
-        )
-
-    # Chart 5: Equation summary
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-    st.markdown("#### CAL Equation Summary")
-
-    eq_col1, eq_col2 = st.columns([1, 1])
-    with eq_col1:
-        st.markdown(f"""
-        <div class='eff-region-card'>
-            <div class='eff-region-title'>📐 Capital Allocation Line Equation</div>
-            <p style='font-family:monospace; font-size:1.05rem; color:#1F4E79; font-weight:700;'>
-                {cal_eq_str}
-            </p>
-            <div style='font-size:0.83rem; color:#595959;'>
-                <b>Intercept:</b> {c_rf:.1f}% &nbsp;(100% in T-Bills, zero risk)<br>
-                <b>Slope:</b> {cal_sharpe:.3f} &nbsp;(Sharpe Ratio — reward per unit of risk)<br>
-                <b>Interpretation:</b> For every 1% increase in Portfolio Std. Dev.,
-                Portfolio Exp. Return increases by {cal_sharpe:.3f}%.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with eq_col2:
-        st.markdown(f"""
-        <div class='eff-region-card'>
-            <div class='eff-region-title'>📌 Key Portfolio Points</div>
-            <div style='font-size:0.83rem;'>
-                <div class='opt-card-row'>
-                    <span>100% Risk-Free (w=0)</span>
-                    <span class='opt-card-value'>E[R]={c_rf:.1f}%, σ=0%</span>
-                </div>
-                <div class='opt-card-row'>
-                    <span>w = 0.5</span>
-                    <span class='opt-card-value'>
-                        E[R]={0.5*c_r_risky + 0.5*c_rf:.2f}%,
-                        σ={0.5*c_sd_risky:.2f}%
-                    </span>
-                </div>
-                <div class='opt-card-row'>
-                    <span>100% Risky (w=1)</span>
-                    <span class='opt-card-value'>E[R]={c_r_risky:.1f}%, σ={c_sd_risky:.1f}%</span>
-                </div>
-                <div class='opt-card-row'>
-                    <span>w = 1.5 (leverage)</span>
-                    <span class='opt-card-value'>
-                        E[R]={1.5*c_r_risky - 0.5*c_rf:.2f}%,
-                        σ={1.5*c_sd_risky:.2f}%
-                    </span>
-                </div>
-                <div class='opt-card-row'>
-                    <span>w = 2 (leverage)</span>
-                    <span class='opt-card-value'>
-                        E[R]={2*c_r_risky - c_rf:.2f}%,
-                        σ={2*c_sd_risky:.2f}%
-                    </span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── SUMMARY TABLE ─────────────────────────────────────────────────────────
-    st.markdown("#### CAL Summary Table")
-    st.plotly_chart(
-        chart_cal_summary_table(c_summary_tbl),
-        use_container_width=True, key="c_summary_tbl"
-    )
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 3 — CORRELATION EFFECT
-# ────────────────────────────────────────────────────────────────────────────
-with tab3:
-
-    st.markdown(
-        "<div class='info-box'>"
-        "ℹ️ Correlation frontiers are always displayed as long-only "
-        "(Asset 1 & Asset 2 Weights: 0% → 100%) regardless of the short-selling setting. "
-        "This is consistent with how Prof. Weisbenner presents correlation effects in Lesson 1-5."
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-    # ── METRICS ──────────────────────────────────────────────────────────────
-    st.markdown("#### Correlation Metrics")
-
-    mvp_sd_neg1 = rho_mvp_sd(f_sd1, f_sd2, -1.0)
-    mvp_sd_zero = rho_mvp_sd(f_sd1, f_sd2,  0.0)
-    mvp_sd_pos1 = rho_mvp_sd(f_sd1, f_sd2,  1.0)
-    mvp_sd_curr = rho_mvp_sd(f_sd1, f_sd2,  f_rho)
-
-    r1, r2, r3, r4 = st.columns(4)
-    r1.metric("Current ρ",              f"{f_rho:.1f}")
-    r2.metric("MVP Std. Dev. at ρ=−1",  f"{mvp_sd_neg1:.2f}%",
-              help="Lowest achievable risk — perfect negative correlation")
-    r3.metric("MVP Std. Dev. at ρ=0",   f"{mvp_sd_zero:.2f}%",
-              help="Risk at zero correlation")
-    r4.metric("MVP Std. Dev. at ρ=+1",  f"{mvp_sd_pos1:.2f}%",
-              help="No diversification benefit — assets move in lockstep")
-
-    # Diversification benefit vs ρ=0
-    benefit = mvp_sd_zero - mvp_sd_curr
-    st.metric(
-        f"Diversification Benefit vs ρ=0 (current ρ={f_rho:.1f})",
-        f"σ reduced by {benefit:.2f}%",
-        help="How much the current correlation reduces MVP Std. Dev. vs zero correlation",
-    )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── CHARTS ───────────────────────────────────────────────────────────────
-    st.markdown("#### Effect of Correlation on the Efficient Frontier")
-    st.plotly_chart(
-        chart_rho_effect(rho_frontiers, f_rho, f_r1, f_sd1, f_r2, f_sd2),
-        use_container_width=True, key="rho_chart"
-    )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    st.markdown("#### Min. Variance Portfolio — Comparison Across Correlations")
-    st.plotly_chart(
-        chart_rho_mvp_table(rho_mvp_df),
-        use_container_width=True, key="rho_mvp_tbl"
-    )
-
-    st.caption(
-        "💡 Assignment 1: Set ρ = −0.8 using the sidebar slider. "
-        "Notice how MVP Std. Dev. drops dramatically — "
-        "lower correlation means more diversification benefit."
-    )
+# Portfolio Frontier & CAL Explorer
+## Design & Requirements Document
+
+**Course:** FIN 511 — Investments I: Fundamentals of Performance Evaluation  
+**Module:** 1 — Lesson 1-5: Portfolio Choice in General Settings  
+**Version:** 1.2 | March 2026
+
+---
+
+## Table of Contents
+
+1. [Project Overview](#1-project-overview)
+2. [Application Structure](#2-application-structure)
+3. [Sidebar Design](#3-sidebar-design)
+4. [Tab 1 — Portfolio Frontier](#4-tab-1--portfolio-frontier)
+5. [Tab 2 — Capital Allocation Line](#5-tab-2--capital-allocation-line)
+6. [Tab 3 — Correlation Effect](#6-tab-3--correlation-effect)
+7. [Display Terminology](#7-display-terminology)
+8. [Core Calculations](#8-core-calculations)
+9. [Future Enhancements](#9-future-enhancements)
+10. [Change Log](#10-change-log)
+
+---
+
+## 1. Project Overview
+
+### 1.1 Purpose
+
+Interactive web application for exploring portfolio theory concepts from FIN 511 Module 1.  
+Allows real-time adjustment of asset parameters to see how they affect the efficient frontier and Capital Allocation Lines.
+
+### 1.2 Tech Stack
+
+| Component | Tool | Purpose |
+|---|---|---|
+| UI Framework | Streamlit | Interactive web app — sliders, tabs, layout. No JavaScript needed |
+| Charts | Plotly | Interactive charts with hover tooltips, zoom, and pan |
+| Math | NumPy | Portfolio calculations — variance, std dev, Sharpe ratio |
+| Data | Pandas | DataFrames for frontier and CAL data |
+| Language | Python | All code — calculations, charts, and UI |
+| Deployment | Streamlit Community Cloud + GitHub | Free hosting, shareable public URL |
+
+### 1.3 File Structure
+
+```
+portfolio_app/
+├── app.py              # Main entry point, Streamlit UI, tab layout
+├── calculations.py     # Pure math functions, no UI dependencies
+├── charts.py           # Plotly figure builders, one function per chart
+├── requirements.txt    # Dependencies for Streamlit Cloud deployment
+└── DESIGN.md           # This file
+```
+
+### 1.4 Deployment
+
+- Code stored in a **public GitHub repository** (MIT license)
+- **Streamlit Community Cloud** connected to the GitHub repo
+- Every save to GitHub auto-redeploys the app within ~30 seconds
+- Shareable URL format: `https://yourname-portfolio-app.streamlit.app`
+- Browser editor: `github.dev/yourname/portfolio-app` (no local install needed)
+
+---
+
+## 2. Application Structure
+
+### 2.1 Overall Layout
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Header: App title + subtitle                               │
+├──────────────┬──────────────────────────────────────────────┤
+│              │  Tab 1: Portfolio Frontier                   │
+│   SIDEBAR    │    ▶ ⚙️ Parameters (expander, collapsed)     │
+│  (minimal)   │    metrics / charts / summary table          │
+│              │                                              │
+│              │  Tab 2: Capital Allocation Line              │
+│              │    ▶ ⚙️ Parameters (expander, collapsed)     │
+│              │    metrics / charts / summary table          │
+│              │                                              │
+│              │  Tab 3: Correlation Effect                   │
+│              │    ▶ ⚙️ Parameters (expander, collapsed)     │
+│              │    metrics / charts                          │
+└──────────────┴──────────────────────────────────────────────┘
+```
+
+### 2.2 Tab Structure
+
+| Tab | Content | Uses Parameters From |
+|---|---|---|
+| Tab 1 — Portfolio Frontier | 4 charts + metrics rows + summary table | Frontier sidebar section |
+| Tab 2 — Capital Allocation Line | 5 charts + metrics row + summary table | CAL sidebar section |
+| Tab 3 — Correlation Effect | 1 multi-line chart + MVP comparison table | Frontier sidebar section (ρ slider) |
+
+### 2.3 Data Flow
+
+```
+User moves slider / toggles checkbox
+         ↓
+app.py reads new params from st.sidebar
+         ↓
+calculations.py recomputes all DataFrames
+         ↓
+charts.py builds new Plotly figures
+         ↓
+Streamlit re-renders only changed components
+```
+
+---
+
+## 3. Sidebar Design
+
+### 3.1 Layout
+
+The sidebar is **minimal** — it holds only global controls. All parameter sliders live inside each tab in a collapsible expander.
+
+```
+SIDEBAR
+│
+├── ☐ Allow Short-Selling   (checkbox, default: OFF)
+│   Affects Tab 1 and Tab 2 charts and metrics
+│
+└── QUICK PRESETS
+    ├── [Default]          [Assignment 1 (ρ=−0.8)]
+    └── [ρ = 0]            [ρ = −1]
+```
+
+### 3.2 Parameter Expanders — Inside Each Tab
+
+Each tab has a collapsible expander at the top for its own parameters. Expanders are **collapsed by default** so charts are immediately visible.
+
+#### Tab 1 — Portfolio Frontier expander (3 columns)
+
+```
+▶ ⚙️ Parameters — Portfolio Frontier
+
+  Asset 1               Asset 2               Correlation & RF
+  ─────────────         ─────────────         ─────────────────
+  Exp. Return (%)       Exp. Return (%)        Correlation (ρ)
+  slider: 0–25%         slider: 0–30%          slider: -1 to +1
+  default 8%            default 15%            default 0.4
+
+  Std. Dev. (%)         Std. Dev. (%)          Risk-Free Rate (%)
+  slider: 5–60%         slider: sd1+1–80%      slider: 0–10%
+  default 25%           default 50%            default 3%
+```
+
+#### Tab 2 — CAL expander (2 columns)
+
+```
+▶ ⚙️ Parameters — Capital Allocation Line
+
+  Risky Asset           Risk-Free Asset
+  ─────────────         ─────────────────
+  Exp. Return (%)       Risk-Free Rate (%)
+  slider: 0–25%         slider: 0–10%
+  default 8%            default 3%
+
+  Std. Dev. (%)         Note: zero std. dev.,
+  slider: 1–60%         zero correlation
+  default 25%           with risky asset
+```
+
+#### Tab 3 — Correlation Effect expander (3 columns)
+
+```
+▶ ⚙️ Parameters — Correlation Effect
+
+  Asset 1               Asset 2               Correlation & RF
+  (same sliders as Tab 1 — shared via session state)
+```
+
+> **Note:** Frontier and CAL parameters are independent — changing one does not affect the other. Tab 3 shares the same parameters as Tab 1.
+
+### 3.3 Parameter Validation — Asset 2 Std. Deviation
+
+| Rule | Behaviour | Implementation |
+|---|---|---|
+| Asset 2 Std. Dev. ≥ Asset 1 Std. Dev. + 1% | Slider minimum dynamically set to `sd1 + 1` | `min_value = sd1 + 1` in `st.slider()` |
+| If sd2 < sd1 + 1 after sd1 is raised | sd2 snaps up to sd1 + 1 automatically | `value = max(sd2, sd1 + 1)` |
+| Notice shown when snap occurs | `st.info()` message displayed | `if sd2_prev < sd1 + 1: st.info(...)` |
+
+**Notice message text:**
+> ℹ️ Asset 2 Std. Dev. has been adjusted upward to maintain the constraint that Asset 2 must be riskier than Asset 1.
+
+### 3.4 Session State Keys
+
+| Key | Type | Purpose |
+|---|---|---|
+| `sd2` | float | Remembers Asset 2 Std. Dev. across rerenders for snap validation |
+| `frontier_rf` | float | Risk-free rate for Frontier tab (Sharpe calculation only) |
+| `cal_rf` | float | Risk-free rate for CAL tab |
+| `allow_short` | bool | Short-selling checkbox state |
+
+---
+
+## 4. Tab 1 — Portfolio Frontier
+
+### 4.1 Metrics — Top of Tab
+
+#### Row 1 — Benchmark Portfolios
+
+Three side-by-side **HTML cards** (flexbox layout, colour-coded border-top):
+
+| Card | Border Colour | Asset 1 Weight | Asset 2 Weight | Metrics Shown |
+|---|---|---|---|---|
+| Asset 1 Only | Navy | 100% | 0% | Exp. Return, Std. Dev., Sharpe Ratio |
+| Asset 2 Only | Amber | 0% | 100% | Exp. Return, Std. Dev., Sharpe Ratio |
+| Equal Weight | Green | 50% | 50% | Exp. Return, Std. Dev., Sharpe Ratio |
+
+Each card uses a label/value table layout — values never truncate regardless of screen width.
+
+#### Row 2 — Optimal Portfolio Cards (styled like MVP card)
+
+| Card | Condition | Shown When |
+|---|---|---|
+| ⭐ Min. Variance Portfolio | Lowest achievable Std. Dev. | Always |
+| ⭐ Max. Sharpe Portfolio | Highest Sharpe Ratio (long-only) | Always |
+| ⭐ Max. Return (Long Only) | Asset 2 Weight = 100% | Always |
+| ⭐ Max. Return (Leveraged) | Asset 2 Weight = 200%, Asset 1 Weight = −100% | Short-selling ON only |
+
+Each card displays: **Asset 1 Weight, Asset 2 Weight, Exp. Return, Std. Dev., Sharpe Ratio**
+
+#### Row 3 — Efficient Frontier Region Summary
+
+**Definition:** Long-only portfolios above MVP (Asset 1 Weight: 0%→100%, Exp. Return ≥ MVP Exp. Return)
+
+> Based on Prof. Weisbenner's lecture — efficient frontier is always presented as long-only in Module 1.
+
+Displayed as **2 rows of 3 `st.metric()` cards** to avoid truncation:
+
+**Row 3a** (3 columns):
+
+| Metric | Example | Notes |
+|---|---|---|
+| Asset 1 Weight Range | Start: 94% / Delta: → 0% | Main value = start, delta = end |
+| Asset 2 Weight Range | Start: 6% / Delta: → 100% | Main value = start, delta = end |
+| Peak Sharpe Ratio | 0.272 | With hover tooltip showing weights |
+
+**Row 3b** (3 columns):
+
+| Metric | Example | Notes |
+|---|---|---|
+| Std. Dev. Range | Start: 24.85% / Delta: → 50.00% | Main value = MVP σ, delta = max σ |
+| Exp. Return Range | Start: 8.50% / Delta: → 15.00% | Main value = MVP ret, delta = max ret |
+| Portfolios in Region | 95 | Count of long-only portfolios above MVP |
+
+### 4.2 Charts
+
+| Chart | Asset 1 Weight Range | Asset 2 Weight Range | Short-Selling Required | Visible When |
+|---|---|---|---|---|
+| All Allocations | −100% → +200% | +200% → −100% | Yes | Short-selling ON only |
+| Efficient vs Dominated | 0% → 100% | 0% → 100% | No | Always |
+| Short A1 / Long A2 | −100% → 0% | 100% → 200% | Yes | Short-selling ON only |
+| Long A1 / Short A2 | 100% → 200% | −100% → 0% | Yes | Short-selling ON only |
+
+### 4.3 Short-Selling Checkbox Behaviour
+
+#### Short-Selling OFF (default)
+
+> ℹ️ **Short-selling is currently disabled.** Only portfolios with Asset 1 Weight: 0%→100% and Asset 2 Weight: 0%→100% are shown. This reflects the real-world constraint most investors face in 401k plans and standard brokerage accounts. Enable short-selling above to see the full frontier including leveraged allocations.
+
+- Charts shown: **Efficient vs Dominated only** (1 chart)
+- Metrics Row 2: **3 cards** — Min. Variance Portfolio, Max. Sharpe, Max. Return (Long Only)
+
+#### Short-Selling ON
+
+> ⚠️ **Short-selling is enabled.** Charts now show all allocations including: Short A1 / Long A2 (Asset 1 Weight < 0%) and Long A1 / Short A2 (Asset 1 Weight > 100%). Note: Short-selling requires a margin account and involves borrowing costs not reflected here. This simple example ignores margin and collateral requirements (per Prof. Weisbenner, Lesson 1-2.5).
+
+- Charts shown: **All 4 charts**
+- Metrics Row 2: **4 cards** — Min. Variance Portfolio, Max. Sharpe, Max. Return (Long Only), Max. Return (Leveraged)
+
+### 4.4 Hover Tooltip
+
+```
+Asset 1 Weight:      94.0%
+Asset 2 Weight:       6.0%
+────────────────────────────
+Exp. Return:          8.50%
+Std. Dev.:           24.85%
+Sharpe Ratio:         0.228
+```
+
+### 4.5 Summary Table — Bottom of Tab
+
+Key allocation points: 100% A1, Min. Variance Portfolio, Max. Sharpe, Equal Weight (50/50), 100% A2, Max. Return (Long Only), Max. Return (Leveraged — if short-selling ON)
+
+| Column | Label in Table | Format |
+|---|---|---|
+| `w_A1` | Asset 1 Weight | XX.X% |
+| `w_A2` | Asset 2 Weight | XX.X% |
+| `ret` | Exp. Return | XX.XX% |
+| `sd` | Std. Dev. | XX.XX% |
+| `sharpe` | Sharpe Ratio | X.XXX |
+| `region` | Region | Text label |
+
+---
+
+## 5. Tab 2 — Capital Allocation Line
+
+### 5.1 Metrics — Top of Tab
+
+Displayed as **2 rows** to avoid truncation:
+
+**Row 1** — 3 columns (CAL summary):
+
+| Metric | Formula | Example |
+|---|---|---|
+| Sharpe Ratio | (Exp. Return − rf) / Std. Dev. | 0.200 |
+| Risk-Free Rate | rf (slider value) | 3.00% |
+| CAL Equation | E[R] = rf + SR × σ | E[R] = 3.0% + 0.200 × σ |
+
+**Row 2** — 4 columns (key portfolio points, main value = Exp. Return, delta = σ):
+
+| Metric | Exp. Return | Std. Dev. |
+|---|---|---|
+| w = 0 (100% Risk-Free) | rf = 3.00% | σ = 0.00% |
+| w = 1 (100% Risky) | 8.00% | σ = 25.00% |
+| w = 1.5 (Leverage) | 10.50% | σ = 37.50% |
+| w = 2 (Max Leverage) | 13.00% | σ = 50.00% |
+
+### 5.2 Charts — Order and Ranges
+
+| # | Chart Title | Risky Asset Weight | Risk-Free Weight | Short-Selling Required | Visible When |
+|---|---|---|---|---|---|
+| 1 | All Allocations | −100% → +200% | +200% → −100% | Yes | Short-selling ON only |
+| 2 | All Long | 0% → +200% | +100% → −100% | No | Always |
+| 3 | Long Without Leverage | 0% → +100% | +100% → 0% | No | Always |
+| 4 | Long With Leverage | +100% → +200% | 0% → −100% | No | Always |
+| 5 | Equation Summary | — | — | No | Always |
+
+### 5.3 Short-Selling Checkbox Behaviour
+
+#### Short-Selling OFF
+
+> ℹ️ **Short-selling disabled.** CAL shown for long positions only (Risky Asset Weight ≥ 0%). The "All Allocations" chart (which includes Risky Asset Weight < 0%, i.e. shorting the risky asset to invest more in T-Bills) is hidden.
+
+- Charts 2–5 shown (All Allocations hidden)
+
+#### Short-Selling ON
+
+> ⚠️ **Short-selling enabled.** "All Allocations" chart now includes Risky Asset Weight < 0%: shorting the risky asset to put more than 100% into T-Bills. Note: negative Sharpe in this region — you earn less than the risk-free rate.
+
+- All 5 charts shown
+
+### 5.4 Hover Tooltip
+
+```
+Risky Asset Weight:   70.0%
+Risk-Free Weight:     30.0%
+────────────────────────────
+Exp. Return:           6.50%
+Std. Dev.:            17.50%
+Sharpe Ratio:          0.200
+
+── Leverage region (Risky Asset Weight > 100%): ──
+Risky Asset Weight:  150.0%
+Risk-Free Weight:    -50.0%    ← negative = borrowing at rf
+────────────────────────────
+Exp. Return:          10.50%
+Std. Dev.:            37.50%
+Sharpe Ratio:          0.200
+```
+
+### 5.5 Summary Table — Bottom of Tab
+
+Key w points: w=−1 (if short ON), w=0, w=0.5, w=1, w=1.5, w=2
+
+| Column | Label in Table | Format |
+|---|---|---|
+| `w_risky` | Risky Asset Weight | XX.X% |
+| `w_rf` | Risk-Free Weight | XX.X% |
+| `ret` | Exp. Return | XX.XX% |
+| `sd` | Std. Dev. | XX.XX% |
+| `sharpe` | Sharpe Ratio | X.XXX |
+| `region` | Region | Text label |
+
+---
+
+## 6. Tab 3 — Correlation Effect
+
+### 6.1 Metrics — Top of Tab
+
+| Metric | Description |
+|---|---|
+| Current ρ | Value of the correlation slider |
+| Min. Variance Portfolio Std. Dev. at ρ=−1 | Lowest achievable risk with perfect negative correlation |
+| Min. Variance Portfolio Std. Dev. at ρ=0 | Risk at zero correlation |
+| Min. Variance Portfolio Std. Dev. at ρ=+1 | Risk at perfect positive correlation (= weighted avg of σ) |
+
+### 6.2 Charts
+
+#### Chart 1 — Overlaid Frontiers
+
+- Five efficient frontiers plotted simultaneously for ρ = −0.8, −0.4, 0, +0.4, +0.8
+- Current ρ frontier shown with **thicker line, full opacity**
+- Other ρ frontiers shown with **dashed lines, reduced opacity**
+- Always long-only (Asset 1 & Asset 2 Weights: 0%→100%) regardless of short-selling checkbox
+
+> ℹ️ Correlation frontiers always displayed as long-only regardless of the short-selling setting. This is consistent with how Prof. Weisbenner presents correlation effects in Lesson 1-5.
+
+#### Chart 2 — MVP Comparison Table
+
+| ρ Value | Asset 1 Weight | Asset 2 Weight | Std. Dev. | Exp. Return |
+|---|---|---|---|---|
+| −0.8 | XX.X% | XX.X% | XX.XX% | XX.XX% |
+| −0.4 | XX.X% | XX.X% | XX.XX% | XX.XX% |
+| 0.0 | XX.X% | XX.X% | XX.XX% | XX.XX% |
+| +0.4 ← current | XX.X% | XX.X% | XX.XX% | XX.XX% |
+| +0.8 | XX.X% | XX.X% | XX.XX% | XX.XX% |
+
+Current ρ row highlighted. Lower ρ → lower MVP Std. Dev. → more diversification benefit.
+
+---
+
+## 7. Display Terminology
+
+### 7.1 Rules
+
+- **Drop "Portfolio" prefix** when context is already clear (inside cards, tables, tooltips)
+- **Keep "Portfolio" prefix** on chart axis labels and standalone messages
+- Asset-level slider labels use `Exp. Return` and `Std. Dev.` without "Portfolio"
+
+### 7.2 Full Reference
+
+| Internal Variable | Short Label (cards / tooltips) | Full Label (chart axes) |
+|---|---|---|
+| `w_A1` | Asset 1 Weight | Asset 1 Weight (%) |
+| `w_A2` | Asset 2 Weight | Asset 2 Weight (%) |
+| `w_risky` | Risky Asset Weight | Risky Asset Weight (%) |
+| `w_rf` | Risk-Free Weight | Risk-Free Weight (%) |
+| `ret` | Exp. Return | Portfolio Exp. Return (%) |
+| `sd` | Std. Dev. | Portfolio Std. Dev. (%) |
+| `sharpe` | Sharpe Ratio | Sharpe Ratio |
+| `rho` / `ρ` | Correlation (ρ) | Correlation (ρ) |
+| `mvp` | Min. Variance Portfolio | — |
+| `r1` | Asset 1 Exp. Return | — |
+| `r2` | Asset 2 Exp. Return | — |
+| `sd1` | Asset 1 Std. Dev. | — |
+| `sd2` | Asset 2 Std. Dev. | — |
+| `rf` | Risk-Free Rate | — |
+
+---
+
+## 8. Core Calculations
+
+### 8.1 calculations.py — Functions
+
+| Function | Inputs | Returns | Used In |
+|---|---|---|---|
+| `portfolio_stats(w, r1, sd1, r2, sd2, rho, rf)` | weight + asset params | `(Exp. Return, Std. Dev., Sharpe)` | frontier builder |
+| `build_frontier(params)` | all frontier params | DataFrame: `w, ret, sd, sharpe, region` | Tab 1 |
+| `build_cal(r_risky, sd_risky, rf)` | CAL params | DataFrame: `w_risky, w_rf, ret, sd, sharpe, region` | Tab 2 |
+| `build_rho_frontiers(params, rho_list)` | frontier params + list of ρ values | `dict {ρ: DataFrame}` | Tab 3 |
+| `find_mvp(frontier_df)` | frontier DataFrame | Row with minimum Std. Dev. | Metrics |
+| `find_max_sharpe(frontier_df)` | frontier DataFrame | Row with maximum Sharpe Ratio | Metrics |
+
+### 8.2 Key Formulas
+
+| Formula | Expression |
+|---|---|
+| Portfolio Exp. Return | `E[Rp] = w × r1 + (1−w) × r2` |
+| Portfolio Variance | `σ²p = w²σ₁² + (1−w)²σ₂² + 2w(1−w)ρσ₁σ₂` |
+| Portfolio Std. Dev. | `σp = √(σ²p)` |
+| Sharpe Ratio | `SR = (E[Rp] − rf) / σp` |
+| CAL Exp. Return | `E[Rp] = rf + SR × σp` |
+| CAL Std. Dev. | `σp = |w| × σ_risky` |
+| MVP Weight (Asset 1) | `w* = (σ₂² − ρσ₁σ₂) / (σ₁² + σ₂² − 2ρσ₁σ₂)` |
+
+### 8.3 DataFrame Columns
+
+#### `frontier_df`
+
+| Column | Type | Description |
+|---|---|---|
+| `w_A1` | float | Weight in Asset 1 (e.g. 0.94 = 94%) |
+| `w_A2` | float | Weight in Asset 2 (= 1 − w_A1) |
+| `ret` | float | Portfolio Exp. Return (%) |
+| `sd` | float | Portfolio Std. Dev. (%) |
+| `sharpe` | float | Sharpe Ratio |
+| `region` | str | `"efficient"`, `"dominated"`, `"short_A1"`, `"long_A1"` |
+
+#### `cal_df`
+
+| Column | Type | Description |
+|---|---|---|
+| `w_risky` | float | Weight in risky asset |
+| `w_rf` | float | Weight in risk-free asset (= 1 − w_risky) |
+| `ret` | float | Portfolio Exp. Return (%) |
+| `sd` | float | Portfolio Std. Dev. (%) |
+| `sharpe` | float | Sharpe Ratio |
+| `region` | str | `"short"`, `"long_no_lev"`, `"long_lev"` |
+
+---
+
+## 9. Future Enhancements
+
+Items to consider for future versions:
+
+| # | Enhancement | Complexity | Notes |
+|---|---|---|---|
+| 1 | Add 3rd asset to frontier | Medium | Extends to N-asset efficient frontier — needed for Assignment 2 (gold, international) |
+| 2 | Export charts as PNG / PDF | Low | Plotly supports download buttons natively |
+| 3 | Save / load parameter presets | Low | Store in JSON or Streamlit session state |
+| 4 | Show tangency portfolio on CAL | Low | Where CAL is tangent to efficient frontier — foundation for CAPM in Module 2 |
+| 5 | Expense ratio comparison (dominated fund) | Low | Real-world application from Lesson 1-5.4 |
+| 6 | Module 2 CAPM extension | High | Beta, Security Market Line, alpha — after Module 2 lectures |
+| 7 | Animate frontier as ρ slider moves | Medium | Real-time frontier shifting with correlation changes |
+| 8 | Mobile responsive layout | Medium | Streamlit mobile layout adjustments |
+
+---
+
+## 10. Change Log
+
+| Version | Date | Change |
+|---|---|---|
+| 1.0 | March 2026 | Initial design document — all requirements locked before coding begins |
+| 1.1 | March 2026 | Layout fixes: Benchmark cards → HTML flexbox; EF Region → 2×3 metric rows; CAL metrics → 2 rows. Fixed HTML rendering bug (indented multi-line strings treated as code blocks by Streamlit Markdown parser) |
+| 1.2 | March 2026 | UI restructure: moved all parameter sliders from sidebar into per-tab collapsible expanders. Sidebar now holds only short-selling toggle and quick presets. Each tab computes from session state after its own sliders run |
+
+> **How to update:** Add a new row to this table whenever a design decision changes, noting what changed and why. Commit the updated `DESIGN.md` in the same pull request as the code change.
+
+---
+
+*Portfolio Frontier & CAL Explorer — Design & Requirements Document v1.0*
