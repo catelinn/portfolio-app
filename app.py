@@ -478,45 +478,69 @@ with tab1:
     )
 
     if eff_summary:
-        # Row 1: weight ranges + peak sharpe (3 columns — less crowded)
+        # Dynamic tooltip helpers — derive directions from actual values
+        w_a1_start = eff_summary['w_A1_range'][0] * 100
+        w_a1_end   = eff_summary['w_A1_range'][1] * 100
+        w_a2_start = eff_summary['w_A2_range'][0] * 100
+        w_a2_end   = eff_summary['w_A2_range'][1] * 100
+        sd_start   = eff_summary['sd_range'][0]
+        sd_end     = eff_summary['sd_range'][1]
+        ret_start  = eff_summary['ret_range'][0]
+        ret_end    = eff_summary['ret_range'][1]
+        pk_a1      = eff_summary['peak_w_A1'] * 100
+        pk_a2      = eff_summary['peak_w_A2'] * 100
+
+        w_a1_dir   = "increases" if w_a1_end > w_a1_start else "decreases"
+        w_a2_dir   = "increases" if w_a2_end > w_a2_start else "decreases"
+        sd_dir     = "increases" if sd_end > sd_start else "decreases"
+        ret_dir    = "increases" if ret_end > ret_start else "decreases"
+        high_ret   = "Asset 1" if f_r1 >= f_r2 else "Asset 2"
+        low_ret    = "Asset 2" if f_r1 >= f_r2 else "Asset 1"
+
+        # Row 1: weight ranges + peak sharpe
         e1, e2, e3 = st.columns(3)
         e1.metric(
             "Asset 1 Weight Range",
-            f"{eff_summary['w_A1_range'][0]*100:.0f}%",
-            f"→ {eff_summary['w_A1_range'][1]*100:.0f}%",
-            help="From MVP down to 100% Asset 2",
+            f"{w_a1_start:.0f}%",
+            f"→ {w_a1_end:.0f}%",
+            help=(f"Asset 1 weight at MVP = {w_a1_start:.0f}%, "
+                  f"{w_a1_dir} to {w_a1_end:.0f}% at 100% {high_ret}"),
         )
         e2.metric(
             "Asset 2 Weight Range",
-            f"{eff_summary['w_A2_range'][0]*100:.0f}%",
-            f"→ {eff_summary['w_A2_range'][1]*100:.0f}%",
-            help="From MVP up to 100% Asset 2",
+            f"{w_a2_start:.0f}%",
+            f"→ {w_a2_end:.0f}%",
+            help=(f"Asset 2 weight at MVP = {w_a2_start:.0f}%, "
+                  f"{w_a2_dir} to {w_a2_end:.0f}% at 100% {high_ret}"),
         )
         e3.metric(
             "Peak Sharpe Ratio",
             f"{eff_summary['peak_sharpe']:.3f}",
-            help=(f"At Asset 1 Weight = {eff_summary['peak_w_A1']*100:.0f}%, "
-                  f"Asset 2 Weight = {eff_summary['peak_w_A2']*100:.0f}%"),
+            help=(f"Highest Sharpe ratio in the efficient frontier region — "
+                  f"at Asset 1 Weight = {pk_a1:.0f}%, Asset 2 Weight = {pk_a2:.0f}%"),
         )
 
         # Row 2: std dev range + return range + portfolio count
         e4, e5, e6 = st.columns(3)
         e4.metric(
             "Std. Dev. Range",
-            f"{eff_summary['sd_range'][0]:.2f}%",
-            f"→ {eff_summary['sd_range'][1]:.2f}%",
-            help="From MVP (lowest) to 100% Asset 2 (highest)",
+            f"{sd_start:.2f}%",
+            f"→ {sd_end:.2f}%",
+            help=(f"Std. Dev. starts at {sd_start:.2f}% (MVP) and "
+                  f"{sd_dir} to {sd_end:.2f}% at 100% {high_ret}"),
         )
         e5.metric(
             "Exp. Return Range",
-            f"{eff_summary['ret_range'][0]:.2f}%",
-            f"→ {eff_summary['ret_range'][1]:.2f}%",
-            help="From MVP return up to 100% Asset 2 return",
+            f"{ret_start:.2f}%",
+            f"→ {ret_end:.2f}%",
+            help=(f"Exp. Return starts at {ret_start:.2f}% (MVP) and "
+                  f"{ret_dir} to {ret_end:.2f}% at 100% {high_ret}"),
         )
         e6.metric(
             "Portfolios in Region",
             f"{eff_summary['n_portfolios']}",
-            help="Number of long-only portfolio combinations above the MVP",
+            help=(f"Number of long-only portfolios with Exp. Return ≥ MVP "
+                  f"({ret_start:.2f}%) — from {w_a1_start:.0f}% to {w_a1_end:.0f}% Asset 1 weight"),
         )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
