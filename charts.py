@@ -272,11 +272,13 @@ def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
     """
     Chart 2 — Long Only (always visible).
     Upper portion = efficient frontier. Lower portion = dominated.
+    Filtered to w_A1: 0% → 100% only.
     """
     fig = go.Figure()
+    df = frontier_df[frontier_df["weight_region"] == "long_only"]
 
     for region in ["efficient", "dominated"]:
-        df_r = frontier_df[frontier_df["region"] == region].sort_values("w_A1", ascending=False)
+        df_r = df[df["region"] == region].sort_values("w_A1", ascending=False)
         if df_r.empty:
             continue
         fig.add_trace(go.Scatter(
@@ -321,13 +323,13 @@ def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
 def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
     """
     Chart 3 — Short Asset 1 / Long Asset 2 (requires short-selling ON).
-    Shows efficient + dominated across full frontier. w_A1 < 0 region may be
-    dominated (when r2 < r1) or efficient (when r2 > r1).
+    Shows efficient + dominated filtered to w_A1: −100% → 0% only.
     """
     fig = go.Figure()
+    df = frontier_df[frontier_df["weight_region"] == "short_A1"]
 
     for region in ["efficient", "dominated"]:
-        df_r = frontier_df[frontier_df["region"] == region].sort_values("w_A1", ascending=False)
+        df_r = df[df["region"] == region].sort_values("w_A1", ascending=False)
         if df_r.empty:
             continue
         fig.add_trace(go.Scatter(
@@ -374,13 +376,13 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
 def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
     """
     Chart 4 — Long Asset 1 / Short Asset 2 (requires short-selling ON).
-    Shows efficient + dominated across full frontier. w_A1 > 1 region is
-    typically dominated (when r1 < r2) but may be efficient if r1 > r2.
+    Shows efficient + dominated filtered to w_A1: 100% → 200% only.
     """
     fig = go.Figure()
+    df = frontier_df[frontier_df["weight_region"] == "long_A1"]
 
     for region in ["efficient", "dominated"]:
-        df_r = frontier_df[frontier_df["region"] == region].sort_values("w_A1", ascending=False)
+        df_r = df[df["region"] == region].sort_values("w_A1", ascending=False)
         if df_r.empty:
             continue
         fig.add_trace(go.Scatter(
