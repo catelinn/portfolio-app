@@ -507,15 +507,15 @@ with tab1:
         e1, e2, e3 = st.columns(3)
         e1.metric(
             "Asset 1 Weight Range",
-            f"{eff_summary['w_A1_range'][0]*100:.0f}%",
-            f"→ {eff_summary['w_A1_range'][1]*100:.0f}%",
+            f"{min(eff_summary['w_A1_range'])*100:.0f}%",
+            f"→ {max(eff_summary['w_A1_range'])*100:.0f}%",
             help=(f"Asset 1 weight at MVP = {mvp_w_a1:.0f}%, "
                   f"{w_a1_dir} to {hi_w_a1:.0f}% at the high-return endpoint ({endpoint})"),
         )
         e2.metric(
             "Asset 2 Weight Range",
-            f"{eff_summary['w_A2_range'][0]*100:.0f}%",
-            f"→ {eff_summary['w_A2_range'][1]*100:.0f}%",
+            f"{min(eff_summary['w_A2_range'])*100:.0f}%",
+            f"→ {max(eff_summary['w_A2_range'])*100:.0f}%",
             help=(f"Asset 2 weight at MVP = {mvp_w_a2:.0f}%, "
                   f"{w_a2_dir} to {hi_w_a2:.0f}% at the high-return endpoint ({endpoint})"),
         )
