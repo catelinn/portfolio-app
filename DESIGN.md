@@ -3,7 +3,7 @@
 
 **Course:** FIN 511 — Investments I: Fundamentals of Performance Evaluation  
 **Module:** 1 — Lesson 1-5: Portfolio Choice in General Settings  
-**Version:** 1.2 | March 2026
+**Version:** 1.5 | March 2026
 
 ---
 
@@ -120,9 +120,14 @@ SIDEBAR
 │   Affects Tab 1 and Tab 2 charts and metrics
 │
 └── QUICK PRESETS
-    ├── [Default]          [Assignment 1 (ρ=−0.8)]
-    └── [ρ = 0]            [ρ = −1]
+    ├── [Baseline]   [ρ = 1]   [ρ = −1]
 ```
+
+| Button | Sets |
+|---|---|
+| Baseline | All parameters reset to defaults |
+| ρ = 1 | All defaults + Correlation = +1.0 |
+| ρ = −1 | All defaults + Correlation = −1.0 |
 
 ### 3.2 Parameter Expanders — Inside Each Tab
 
@@ -133,7 +138,7 @@ Each tab has a collapsible expander at the top for its own parameters. Expanders
 ```
 ▶ ⚙️ Parameters — Portfolio Frontier
 
-  Asset 1               Asset 2               Correlation & RF
+  Asset 1               Asset 2 (more risky)  Correlation & RF
   ─────────────         ─────────────         ─────────────────
   Exp. Return (%)       Exp. Return (%)        Correlation (ρ)
   slider: 0–25%         slider: 0–30%          slider: -1 to +1
@@ -204,7 +209,7 @@ Three side-by-side **HTML cards** (flexbox layout, colour-coded border-top):
 | Card | Border Colour | Asset 1 Weight | Asset 2 Weight | Metrics Shown |
 |---|---|---|---|---|
 | Asset 1 Only | Navy | 100% | 0% | Exp. Return, Std. Dev., Sharpe Ratio |
-| Asset 2 Only | Amber | 0% | 100% | Exp. Return, Std. Dev., Sharpe Ratio |
+| Asset 2 Only (more risky) | Amber | 0% | 100% | Exp. Return, Std. Dev., Sharpe Ratio |
 | Equal Weight | Green | 50% | 50% | Exp. Return, Std. Dev., Sharpe Ratio |
 
 Each card uses a label/value table layout — values never truncate regardless of screen width.
@@ -259,7 +264,7 @@ Displayed as **2 rows of 3 `st.metric()` cards** to avoid truncation:
 
 > ℹ️ **Short-selling is currently disabled.** Only portfolios with Asset 1 Weight: 0%→100% and Asset 2 Weight: 0%→100% are shown. This reflects the real-world constraint most investors face in 401k plans and standard brokerage accounts. Enable short-selling above to see the full frontier including leveraged allocations.
 
-- Charts shown: **Efficient vs Dominated only** (1 chart)
+- Charts shown: **Long Only** (1 chart)
 - Metrics Row 2: **3 cards** — Min. Variance Portfolio, Max. Sharpe, Max. Return (Long Only)
 
 #### Short-Selling ON
@@ -516,6 +521,9 @@ Items to consider for future versions:
 | 1.0 | March 2026 | Initial design document — all requirements locked before coding begins |
 | 1.1 | March 2026 | Layout fixes: Benchmark cards → HTML flexbox; EF Region → 2×3 metric rows; CAL metrics → 2 rows. Fixed HTML rendering bug (indented multi-line strings treated as code blocks by Streamlit Markdown parser) |
 | 1.2 | March 2026 | UI restructure: moved all parameter sliders from sidebar into per-tab collapsible expanders. Sidebar now holds only short-selling toggle and quick presets. Each tab computes from session state after its own sliders run |
+| 1.3 | March 2026 | Presets: renamed "Default"→"Baseline", removed "ρ=0" and "Assignment 1", added "ρ=1"; labels: "Asset 2"→"Asset 2 (more risky)" in expander and benchmark card; Chart 2 renamed "Long Only"; Chart 4 title removed "— Dominated"; all 4 charts now always show red dashed dominated line; Charts 3 & 4 show dominated annotation dynamically based on r1 vs r2 |
+| 1.4 | March 2026 | Charts 1, 3, 4: replaced region-colored lines with efficient+dominated only (dominated defined by MVP position, not long/short composition); added 200% A1 and 200% A2 open-diamond markers to Charts 1, 3, 4; removed separate orange/purple short-selling region lines; renamed chart function to chart_frontier_long_only |
+| 1.5 | March 2026 | Chart 1: restored 3-segment coloring (long only/short A1/long A1) all solid lines; Charts 2/3/4: filter frontier by weight_region before plotting efficient+dominated; Charts 3 & 4: pass filtered df to extreme markers so only in-range 200% markers appear; legend moved outside plot area to prevent overlap |
 
 > **How to update:** Add a new row to this table whenever a design decision changes, noting what changed and why. Commit the updated `DESIGN.md` in the same pull request as the code change.
 
