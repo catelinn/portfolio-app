@@ -596,16 +596,30 @@ with tab2:
     # ── METRICS ──────────────────────────────────────────────────────────────
     st.markdown("#### CAL Metrics")
 
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("Sharpe Ratio",    f"{cal_sharpe:.3f}")
-    m2.metric("Risk-Free Rate",  f"{c_rf:.1f}%",
-              help="Intercept of the CAL — 100% T-Bills")
-    m3.metric("100% Risky",
-              f"E[R]={c_r_risky:.1f}%  σ={c_sd_risky:.1f}%")
-    m4.metric("w=2 (Leverage)",
-              f"E[R]={2*c_r_risky - c_rf:.1f}%  σ={2*c_sd_risky:.1f}%",
-              help="Borrow 100% of portfolio value at rf to double risky exposure")
-    m5.metric("CAL Equation", cal_eq_str)
+    # Row 1 — Sharpe, risk-free rate, CAL equation
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Sharpe Ratio", f"{cal_sharpe:.3f}",
+              help="Slope of the CAL — reward per unit of risk taken")
+    m2.metric("Risk-Free Rate", f"{c_rf:.2f}%",
+              help="Intercept of the CAL — Exp. Return when 100% in T-Bills, σ = 0%")
+    m3.metric("CAL Equation",
+              f"E[R] = {c_rf:.1f}% + {cal_sharpe:.3f} × σ")
+
+    # Row 2 — Key portfolio points on the CAL
+    p1, p2, p3, p4 = st.columns(4)
+    p1.metric("w = 0  (100% Risk-Free)",
+              f"{c_rf:.2f}%",
+              "σ = 0.00%")
+    p2.metric("w = 1  (100% Risky)",
+              f"{c_r_risky:.2f}%",
+              f"σ = {c_sd_risky:.2f}%")
+    p3.metric("w = 1.5  (Leverage)",
+              f"{1.5*c_r_risky - 0.5*c_rf:.2f}%",
+              f"σ = {1.5*c_sd_risky:.2f}%")
+    p4.metric("w = 2  (Max Leverage)",
+              f"{2*c_r_risky - c_rf:.2f}%",
+              f"σ = {2*c_sd_risky:.2f}%",
+              help="Borrow 100% at rf to double risky exposure")
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
