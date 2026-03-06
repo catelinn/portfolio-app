@@ -157,7 +157,7 @@ def _add_mvp_marker(fig, mvp):
         x=[mvp["sd"]], y=[mvp["ret"]], mode="markers+text",
         marker=dict(size=14, color=COLORS["green"],
                     symbol="star", line=dict(width=1, color="white")),
-        text=["⭐ MVP"], textposition="top left",
+        text=["MVP"], textposition="top left",
         textfont=dict(size=10, color=COLORS["green"]),
         name="Min. Variance Portfolio",
         customdata=[[
@@ -179,12 +179,12 @@ def _add_key_portfolio_markers(fig, frontier_df, chart_regions, max_sr, max_ret_
     Boundaries (w=0, w=1) belong to "chart2" only — Charts 3 & 4 pass {"chart3"} / {"chart4"}
     so they never inadvertently show long-only portfolio markers."""
     markers = [
-        (max_sr,      "⭐ Max Sharpe",            COLORS["blue"],  "star-diamond",     "top right"),
-        (max_ret_lo,  "⭐ Max Return (Long Only)", COLORS["green"], "star-triangle-up", "top right"),
+        (max_sr,      "Max Sharpe",            COLORS["blue"],  "star-diamond",     "top right"),
+        (max_ret_lo,  "Max Return (Long Only)", COLORS["green"], "star-triangle-up", "top right"),
     ]
     if allow_short and max_ret_lev is not None:
         markers.append(
-            (max_ret_lev, "⭐ Max Return (Leveraged)", COLORS["red"], "star-triangle-up", "top right")
+            (max_ret_lev, "Max Return (Leveraged)", COLORS["red"], "star-triangle-up", "top right")
         )
     for port, label, color, symbol, tpos in markers:
         if port is None:
