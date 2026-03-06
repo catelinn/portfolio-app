@@ -3,7 +3,7 @@
 
 **Course:** FIN 511 — Investments I: Fundamentals of Performance Evaluation  
 **Module:** 1 — Lesson 1-5: Portfolio Choice in General Settings  
-**Version:** 2.5 | March 2026
+**Version:** 1.0 | March 2026
 
 ---
 
@@ -70,16 +70,9 @@ portfolio_app/
 │  Header: App title + subtitle                               │
 ├──────────────┬──────────────────────────────────────────────┤
 │              │  Tab 1: Portfolio Frontier                   │
-│   SIDEBAR    │    ▶ ⚙️ Parameters (expander, collapsed)     │
-│  (minimal)   │    metrics / charts / summary table          │
+│   SIDEBAR    │  Tab 2: Capital Allocation Line              │
+│  (controls)  │  Tab 3: Correlation Effect                   │
 │              │                                              │
-│              │  Tab 2: Capital Allocation Line              │
-│              │    ▶ ⚙️ Parameters (expander, collapsed)     │
-│              │    metrics / charts / summary table          │
-│              │                                              │
-│              │  Tab 3: Correlation Effect                   │
-│              │    ▶ ⚙️ Parameters (expander, collapsed)     │
-│              │    metrics / charts                          │
 └──────────────┴──────────────────────────────────────────────┘
 ```
 
@@ -111,72 +104,34 @@ Streamlit re-renders only changed components
 
 ### 3.1 Layout
 
-The sidebar is **minimal** — it holds only global controls. All parameter sliders live inside each tab in a collapsible expander.
-
 ```
 SIDEBAR
 │
-├── ☐ Allow Short-Selling   (checkbox, default: OFF)
-│   Affects Tab 1 and Tab 2 charts and metrics
+├── ☐ Allow Short-Selling        (checkbox, default: OFF)
+│   Affects Tab 1 and Tab 2 only
 │
-└── QUICK PRESETS
-    ├── [Baseline]   [ρ = 1]   [ρ = −1]
+├── 📊 PORTFOLIO FRONTIER
+│   ├── Asset 1
+│   │   ├── Expected Return (%)  slider: 0–25%,      default 8%
+│   │   └── Std. Deviation (%)   slider: 5–60%,      default 25%
+│   ├── Asset 2
+│   │   ├── Expected Return (%)  slider: 0–30%,      default 15%
+│   │   └── Std. Deviation (%)   slider: sd1+1–80%,  default 50%
+│   ├── Correlation (ρ)          slider: -1 to +1,   default 0.4
+│   └── Risk-Free Rate (%)       slider: 0–10%,      default 3%
+│       note: "Used for Sharpe ratio calculation only"
+│
+└── 📈 CAPITAL ALLOCATION LINE
+    ├── Risky Asset
+    │   ├── Expected Return (%)  slider: 0–25%,      default 8%
+    │   └── Std. Deviation (%)   slider: 5–60%,      default 25%
+    └── Risk-Free Rate (%)       slider: 0–10%,      default 3%
+        note: "T-Bill rate — zero std. dev. by definition"
 ```
 
-| Button | Sets |
-|---|---|
-| Baseline | All parameters reset to defaults |
-| ρ = 1 | All defaults + Correlation = +1.0 |
-| ρ = −1 | All defaults + Correlation = −1.0 |
+> **Note:** Frontier and CAL parameters are independent — changing one does not affect the other.
 
-### 3.2 Parameter Expanders — Inside Each Tab
-
-Each tab has a collapsible expander at the top for its own parameters. Expanders are **collapsed by default** so charts are immediately visible.
-
-#### Tab 1 — Portfolio Frontier expander (3 columns)
-
-```
-▶ ⚙️ Parameters — Portfolio Frontier
-
-  Asset 1               Asset 2 (more risky)  Correlation & RF
-  ─────────────         ─────────────         ─────────────────
-  Exp. Return (%)       Exp. Return (%)        Correlation (ρ)
-  slider: 0–25%         slider: 0–30%          slider: -1 to +1
-  default 8%            default 15%            default 0.4
-
-  Std. Dev. (%)         Std. Dev. (%)          Risk-Free Rate (%)
-  slider: 5–60%         slider: sd1+1–80%      slider: 0–10%
-  default 25%           default 50%            default 3%
-```
-
-#### Tab 2 — CAL expander (2 columns)
-
-```
-▶ ⚙️ Parameters — Capital Allocation Line
-
-  Risky Asset           Risk-Free Asset
-  ─────────────         ─────────────────
-  Exp. Return (%)       Risk-Free Rate (%)
-  slider: 0–25%         slider: 0–10%
-  default 8%            default 3%
-
-  Std. Dev. (%)         Note: zero std. dev.,
-  slider: 1–60%         zero correlation
-  default 25%           with risky asset
-```
-
-#### Tab 3 — Correlation Effect expander (3 columns)
-
-```
-▶ ⚙️ Parameters — Correlation Effect
-
-  Asset 1               Asset 2               Correlation & RF
-  (same sliders as Tab 1 — shared via session state)
-```
-
-> **Note:** Frontier and CAL parameters are independent — changing one does not affect the other. Tab 3 shares the same parameters as Tab 1.
-
-### 3.3 Parameter Validation — Asset 2 Std. Deviation
+### 3.2 Parameter Validation — Asset 2 Std. Deviation
 
 | Rule | Behaviour | Implementation |
 |---|---|---|
@@ -187,7 +142,7 @@ Each tab has a collapsible expander at the top for its own parameters. Expanders
 **Notice message text:**
 > ℹ️ Asset 2 Std. Dev. has been adjusted upward to maintain the constraint that Asset 2 must be riskier than Asset 1.
 
-### 3.4 Session State Keys
+### 3.3 Session State Keys
 
 | Key | Type | Purpose |
 |---|---|---|
@@ -204,15 +159,13 @@ Each tab has a collapsible expander at the top for its own parameters. Expanders
 
 #### Row 1 — Benchmark Portfolios
 
-Three side-by-side **HTML cards** (flexbox layout, colour-coded border-top):
+Three side-by-side cards:
 
-| Card | Border Colour | Asset 1 Weight | Asset 2 Weight | Metrics Shown |
-|---|---|---|---|---|
-| Asset 1 Only | Navy | 100% | 0% | Exp. Return, Std. Dev., Sharpe Ratio |
-| Asset 2 Only (more risky) | Amber | 0% | 100% | Exp. Return, Std. Dev., Sharpe Ratio |
-| Equal Weight | Green | 50% | 50% | Exp. Return, Std. Dev., Sharpe Ratio |
-
-Each card uses a label/value table layout — values never truncate regardless of screen width.
+| Card | Asset 1 Weight | Asset 2 Weight | Metrics Shown |
+|---|---|---|---|
+| Asset 1 Only | 100% | 0% | Exp. Return, Std. Dev., Sharpe Ratio |
+| Asset 2 Only | 0% | 100% | Exp. Return, Std. Dev., Sharpe Ratio |
+| Equal Weight | 50% | 50% | Exp. Return, Std. Dev., Sharpe Ratio |
 
 #### Row 2 — Optimal Portfolio Cards (styled like MVP card)
 
@@ -231,23 +184,15 @@ Each card displays: **Asset 1 Weight, Asset 2 Weight, Exp. Return, Std. Dev., Sh
 
 > Based on Prof. Weisbenner's lecture — efficient frontier is always presented as long-only in Module 1.
 
-Displayed as **2 rows of 3 `st.metric()` cards** to avoid truncation:
-
-**Row 3a** (3 columns):
-
-| Metric | Example | Notes |
+| Field | Example | Notes |
 |---|---|---|
-| Asset 1 Weight Range | Start: 94% / Delta: → 0% | Main value = start, delta = end |
-| Asset 2 Weight Range | Start: 6% / Delta: → 100% | Main value = start, delta = end |
-| Peak Sharpe Ratio | 0.272 | With hover tooltip showing weights |
-
-**Row 3b** (3 columns):
-
-| Metric | Example | Notes |
-|---|---|---|
-| Std. Dev. Range | Start: 24.85% / Delta: → 50.00% | Main value = MVP σ, delta = max σ |
-| Exp. Return Range | Start: 8.50% / Delta: → 15.00% | Main value = MVP ret, delta = max ret |
-| Portfolios in Region | 95 | Count of long-only portfolios above MVP |
+| Asset 1 Weight range | 94.0% → 0.0% | From MVP down to 100% Asset 2 |
+| Asset 2 Weight range | 6.0% → 100.0% | From MVP up to 100% Asset 2 |
+| Std. Dev. range | 24.85% → 50.00% | From MVP to 100% Asset 2 |
+| Exp. Return range | 8.50% → 15.00% | From MVP to 100% Asset 2 |
+| Peak Sharpe Ratio | 0.272 | Highest SR within efficient region |
+| Peak Sharpe at | Asset 1 Weight=88%, Asset 2 Weight=12% | Weights at max Sharpe |
+| Number of portfolios | 94 | Count of data points in efficient region |
 
 ### 4.2 Charts
 
@@ -264,7 +209,7 @@ Displayed as **2 rows of 3 `st.metric()` cards** to avoid truncation:
 
 > ℹ️ **Short-selling is currently disabled.** Only portfolios with Asset 1 Weight: 0%→100% and Asset 2 Weight: 0%→100% are shown. This reflects the real-world constraint most investors face in 401k plans and standard brokerage accounts. Enable short-selling above to see the full frontier including leveraged allocations.
 
-- Charts shown: **Long Only** (1 chart)
+- Charts shown: **Efficient vs Dominated only** (1 chart)
 - Metrics Row 2: **3 cards** — Min. Variance Portfolio, Max. Sharpe, Max. Return (Long Only)
 
 #### Short-Selling ON
@@ -304,24 +249,13 @@ Key allocation points: 100% A1, Min. Variance Portfolio, Max. Sharpe, Equal Weig
 
 ### 5.1 Metrics — Top of Tab
 
-Displayed as **2 rows** to avoid truncation:
-
-**Row 1** — 3 columns (CAL summary):
-
 | Metric | Formula | Example |
 |---|---|---|
-| Sharpe Ratio | (Exp. Return − rf) / Std. Dev. | 0.200 |
-| Risk-Free Rate | rf (slider value) | 3.00% |
-| CAL Equation | E[R] = rf + SR × σ | E[R] = 3.0% + 0.200 × σ |
-
-**Row 2** — 4 columns (key portfolio points, main value = Exp. Return, delta = σ):
-
-| Metric | Exp. Return | Std. Dev. |
-|---|---|---|
-| w = 0 (100% Risk-Free) | rf = 3.00% | σ = 0.00% |
-| w = 1 (100% Risky) | 8.00% | σ = 25.00% |
-| w = 1.5 (Leverage) | 10.50% | σ = 37.50% |
-| w = 2 (Max Leverage) | 13.00% | σ = 50.00% |
+| Sharpe Ratio | (Exp. Return − Risk-Free Rate) / Std. Dev. | 0.200 |
+| CAL Equation | Exp. Return = rf + SR × Std. Dev. | Exp. Return = 3% + 0.200 × Std. Dev. |
+| 100% Risk-Free point | w=0: Exp. Return=rf, Std. Dev.=0% | Exp. Return=3%, Std. Dev.=0% |
+| 100% Risky point | w=1: Exp. Return=r, Std. Dev.=σ | Exp. Return=8%, Std. Dev.=25% |
+| w=2 Leverage point | w=2: Exp. Return=2r−rf, Std. Dev.=2σ | Exp. Return=13%, Std. Dev.=50% |
 
 ### 5.2 Charts — Order and Ranges
 
@@ -519,21 +453,6 @@ Items to consider for future versions:
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | March 2026 | Initial design document — all requirements locked before coding begins |
-| 1.1 | March 2026 | Layout fixes: Benchmark cards → HTML flexbox; EF Region → 2×3 metric rows; CAL metrics → 2 rows. Fixed HTML rendering bug (indented multi-line strings treated as code blocks by Streamlit Markdown parser) |
-| 1.2 | March 2026 | UI restructure: moved all parameter sliders from sidebar into per-tab collapsible expanders. Sidebar now holds only short-selling toggle and quick presets. Each tab computes from session state after its own sliders run |
-| 1.3 | March 2026 | Presets: renamed "Default"→"Baseline", removed "ρ=0" and "Assignment 1", added "ρ=1"; labels: "Asset 2"→"Asset 2 (more risky)" in expander and benchmark card; Chart 2 renamed "Long Only"; Chart 4 title removed "— Dominated"; all 4 charts now always show red dashed dominated line; Charts 3 & 4 show dominated annotation dynamically based on r1 vs r2 |
-| 1.4 | March 2026 | Charts 1, 3, 4: replaced region-colored lines with efficient+dominated only (dominated defined by MVP position, not long/short composition); added 200% A1 and 200% A2 open-diamond markers to Charts 1, 3, 4; removed separate orange/purple short-selling region lines; renamed chart function to chart_frontier_long_only |
-| 1.5 | March 2026 | Chart 1: restored 3-segment coloring (long only/short A1/long A1) all solid lines; Charts 2/3/4: filter frontier by weight_region before plotting efficient+dominated; Charts 3 & 4: pass filtered df to extreme markers so only in-range 200% markers appear; legend moved outside plot area to prevent overlap |
-| 1.6 | March 2026 | Aligned dominated annotation across Charts 2, 3, 4 to data-driven check (rows exist in filtered df) instead of r1 vs r2 comparison; added dominated annotation to Chart 2 |
-| 1.7 | March 2026 | Renamed all markers to dual-weight labels e.g. "(100% A1, 0% A2)"; fixed missing boundary markers in Charts 3 & 4 by widening filter to ±0.02 around w_A1=0 and w_A1=1; all marker helpers fully data-driven with no hardcoded r1/sd1/r2/sd2 params |
-| 1.8 | March 2026 | Added Max Sharpe, Max Return (Long Only), and Max Return (Leveraged) markers to all 4 frontier charts via _add_key_portfolio_markers helper; leveraged marker conditional on allow_short |
-| 1.9 | March 2026 | Verified and documented that all frontier chart markers and lines are fully data-driven; _add_key_portfolio_markers checks w_A1 against filtered df before plotting; CAL chart hardcoding confirmed intentional |
-| 2.0 | March 2026 | Added chart_region column to build_frontier() for strict marker ownership (boundaries w=0/w=1 belong to chart2 only); _add_key_portfolio_markers uses chart_region lookup instead of magic number ranges; weight_region retained for line coloring and boundary-widened df filtering |
-| 2.1 | March 2026 | Replaced all hardcoded ? tooltip texts in Efficient Frontier Region metrics with dynamic values derived from eff_summary and current parameters — direction words (increases/decreases), actual MVP values, and which asset has the higher return are all computed at runtime |
-| 2.2 | March 2026 | Fixed Efficient Frontier Region tooltip endpoint labels — removed hardcoded "100% Asset 1/2" assumption; all 6 metric tooltips now derive endpoint from actual w_A1_range/w_A2_range end values (e.g. "200% A1 / -100% A2" when short-selling is on) |
-| 2.3 | March 2026 | Replaced eff_summary tuple-based tooltip helpers with direct frontier_df row lookups — mvp row for start point, max_ret_lev (short-selling on) or max_ret_lo (long-only) for high-return endpoint; correct for all parameter combinations without any tuple ordering assumptions |
-| 2.4 | March 2026 | Added mvp_row (ret.idxmin()) and hi_ret_row (ret.idxmax()) to eff_summary in calculations.py; EFR card display and tooltips now sourced entirely from these rows — Asset 1/2 Weight Range always shows MVP value → high-return endpoint value regardless of which asset has higher return |
-| 2.5 | March 2026 | Added allow_short parameter to efficient_frontier_region(); filters to weight_region == "long_only" when False, uses full frontier df when True — EFR card now correctly reflects the active weight range in both modes; build_frontier() column assignments unchanged |
 
 > **How to update:** Add a new row to this table whenever a design decision changes, noting what changed and why. Commit the updated `DESIGN.md` in the same pull request as the code change.
 
