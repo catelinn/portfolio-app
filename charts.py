@@ -53,7 +53,7 @@ REGION_LABELS = {
     "long_A1":     "Long Asset 1 / Short Asset 2",
     "long_no_lev": "Long (No Leverage)",
     "long_lev":    "Long With Leverage",
-    "short":       "Short Risky Asset",
+    "short":       "200% Risk-Free, -100% Risky (Short-Selling)",
 }
 
 
@@ -538,11 +538,11 @@ def _add_cal_key_markers(fig, cal_df, r_risky, sd_risky, rf):
         (sd_risky,     r_risky,            sd_risky,   "100% Risky Asset",             COLORS["navy"]),
         (2*sd_risky,   2*r_risky-rf,       2*sd_risky, "200% Risky Asset (Leverage)",  COLORS["red"]),
     ]
-    # Add -100% Risky Asset (Short-Selling) only if w=-1 exists in cal_df
+    # Add 200% Risk-Free, -100% Risky (Short-Selling) only if w=-1 exists in cal_df
     df_short = cal_df[cal_df["w_risky"].between(-1.02, -0.98)]
     if not df_short.empty:
         points.append(
-            (sd_risky, -r_risky + 2*rf, sd_risky, "200% Risk Free, -100% Risky (Short-Selling)", COLORS["purple"] if "purple" in COLORS else "#7B2D8B")
+            (sd_risky, -r_risky + 2*rf, sd_risky, "200% Risk-Free, -100% Risky (Short-Selling)", COLORS["purple"] if "purple" in COLORS else "#7B2D8B")
         )
         # Compute properly from cal_df row
         row = df_short.iloc[0]
@@ -553,10 +553,10 @@ def _add_cal_key_markers(fig, cal_df, r_risky, sd_risky, rf):
             mode="markers+text",
             marker=dict(size=10, color="#7B2D8B", symbol="circle",
                         line=dict(width=1, color="white")),
-            text=["-100% Risky Asset (Short-Selling)"], textposition="top right",
+            text=["200% Risk-Free, -100% Risky (Short-Selling)"], textposition="top right",
             textfont=dict(size=10, color="#7B2D8B"),
-            name="-100% Risky Asset (Short-Selling)",
-            customdata=[["200% Risk Free, -100% Risky (Short-Selling)", w*100, w_rf*100, sharpe]],
+            name="200% Risk-Free, -100% Risky (Short-Selling)",
+            customdata=[["200% Risk-Free, -100% Risky (Short-Selling)", w*100, w_rf*100, sharpe]],
             hovertemplate=_hover_cal(),
             showlegend=True,
         ))

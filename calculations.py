@@ -471,7 +471,7 @@ def cal_summary_table(r_risky, sd_risky, rf, allow_short=False):
 
     rows = []
     if allow_short:
-        rows.append(make_row("Short Risky Asset (w=−1)",   -1.0))
+        rows.append(make_row("200% Risk-Free, -100% Risky (Short-Selling) (w=−1)",   -1.0))
     rows += [
         make_row("100% Risk-Free (w=0)",                  0.0),
         make_row("50% Risky (w=0.5)",                      0.5),
