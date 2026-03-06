@@ -361,6 +361,8 @@ def efficient_frontier_region(frontier_df):
         return eff_df, {}
 
     peak_sr_row = eff_df.loc[eff_df["sharpe"].idxmax()]
+    mvp_row     = eff_df.loc[eff_df["ret"].idxmin()]
+    hi_ret_row  = eff_df.loc[eff_df["ret"].idxmax()]
 
     summary = {
         "w_A1_range":   (eff_df["w_A1"].max(), eff_df["w_A1"].min()),
@@ -371,6 +373,8 @@ def efficient_frontier_region(frontier_df):
         "peak_w_A1":    peak_sr_row["w_A1"],
         "peak_w_A2":    peak_sr_row["w_A2"],
         "n_portfolios": len(eff_df),
+        "mvp_row":      mvp_row,
+        "hi_ret_row":   hi_ret_row,
     }
 
     return eff_df, summary

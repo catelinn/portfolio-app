@@ -478,12 +478,9 @@ with tab1:
     )
 
     if eff_summary:
-        # Derive tooltip values directly from frontier_df rows — always correct
-        # regardless of parameter settings or short-selling state.
-        # MVP row: lowest return in efficient region = starting point
-        # High-return endpoint: max_ret_lo (long-only) or max_ret_lev (leveraged)
-        mvp_row  = mvp
-        hi_row   = max_ret_lev if allow_short else max_ret_lo
+        # Derive all values from eff_summary rows — fully data-driven
+        mvp_row  = eff_summary['mvp_row']
+        hi_row   = eff_summary['hi_ret_row']
 
         mvp_w_a1  = mvp_row["w_A1"] * 100
         mvp_w_a2  = mvp_row["w_A2"] * 100
@@ -507,15 +504,15 @@ with tab1:
         e1, e2, e3 = st.columns(3)
         e1.metric(
             "Asset 1 Weight Range",
-            f"{min(eff_summary['w_A1_range'])*100:.0f}%",
-            f"→ {max(eff_summary['w_A1_range'])*100:.0f}%",
+            f"{mvp_w_a1:.0f}%",
+            f"→ {hi_w_a1:.0f}%",
             help=(f"Asset 1 weight at MVP = {mvp_w_a1:.0f}%, "
                   f"{w_a1_dir} to {hi_w_a1:.0f}% at the high-return endpoint ({endpoint})"),
         )
         e2.metric(
             "Asset 2 Weight Range",
-            f"{min(eff_summary['w_A2_range'])*100:.0f}%",
-            f"→ {max(eff_summary['w_A2_range'])*100:.0f}%",
+            f"{mvp_w_a2:.0f}%",
+            f"→ {hi_w_a2:.0f}%",
             help=(f"Asset 2 weight at MVP = {mvp_w_a2:.0f}%, "
                   f"{w_a2_dir} to {hi_w_a2:.0f}% at the high-return endpoint ({endpoint})"),
         )
