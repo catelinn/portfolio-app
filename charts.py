@@ -230,7 +230,7 @@ def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
 
 def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
     """
-    Chart 2 — Efficient vs Dominated (long-only, always visible).
+    Chart 2 — long positions only (always visible).
     Upper portion = efficient frontier. Lower portion = dominated.
     """
     fig = go.Figure()
@@ -273,7 +273,7 @@ def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
         title="Long Only",
         xaxis_title="Portfolio Std. Dev. (%)",
         yaxis_title="Portfolio Exp. Return (%)",
-        subtitle="Asset 1 Weight: 0% → 100%  |  Asset 2 Weight: 0% → 100%",
+        subtitle="Asset 1 Weight: 0% → 100%  |  Asset 2 Weight: 100% → 0%",
     ))
     return fig
 
@@ -319,7 +319,7 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
         title="Short Asset 1 / Long Asset 2",
         xaxis_title="Portfolio Std. Dev. (%)",
         yaxis_title="Portfolio Exp. Return (%)",
-        subtitle="Asset 1 Weight: −100% → 0%  |  Asset 2 Weight: 100% → 200%",
+        subtitle="Asset 1 Weight: −100% → 0%  |  Asset 2 Weight: 200% → 100%",
     ))
     return fig
 
@@ -365,7 +365,7 @@ def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
         title="Long Asset 1 / Short Asset 2",
         xaxis_title="Portfolio Std. Dev. (%)",
         yaxis_title="Portfolio Exp. Return (%)",
-        subtitle="Asset 1 Weight: 100% → 200%  |  Asset 2 Weight: −100% → 0%",
+        subtitle="Asset 1 Weight: 100% → 200%  |  Asset 2 Weight: 0% → −100%",
     ))
     return fig
 
