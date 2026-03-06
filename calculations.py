@@ -148,45 +148,18 @@ def build_frontier(r1, sd1, r2, sd2, rho, rf,
     mvp_ret = df.loc[mvp_idx, "ret"]
 
     # Assign region
-    # efficient/dominated applies to ALL weights based on return vs MVP return.
-    # short_A1 / long_A1 are sub-labels within the dominated/efficient split,
-    # used only by Chart 1 to color the three weight segments distinctly.
     def assign_region(row):
-        if row["ret"] >= mvp_ret:
-            return "efficient"
-        else:
-            return "dominated"
-
-    df["region"] = df.apply(assign_region, axis=1)
-
-    # weight_region: Chart 1 coloring — each row belongs to one of 3 segments
-    # Boundary points (w=0, w=1) belong to long_only (Chart 2), not to
-    # short_A1 (Chart 3) or long_A1 (Chart 4).
-    def assign_weight_region(row):
         w = row["w_A1"]
         if w < 0:
             return "short_A1"
         elif w > 1:
             return "long_A1"
+        elif row["ret"] >= mvp_ret:
+            return "efficient"
         else:
-            return "long_only"
+            return "dominated"
 
-    df["weight_region"] = df.apply(assign_weight_region, axis=1)
-
-    # chart_region: strict ownership per chart — used by key portfolio marker
-    # checks to decide which chart a portfolio belongs to.
-    # Boundaries (w=0, w=1) belong exclusively to long_only (Chart 2).
-    # chart3 = strictly w < 0; chart4 = strictly w > 1.
-    def assign_chart_region(row):
-        w = row["w_A1"]
-        if w < 0:
-            return "chart3"
-        elif w > 1:
-            return "chart4"
-        else:
-            return "chart2"
-
-    df["chart_region"] = df.apply(assign_chart_region, axis=1)
+    df["region"] = df.apply(assign_region, axis=1)
     return df
 
 
@@ -341,32 +314,26 @@ def find_max_return(frontier_df, long_only=True):
     return frontier_df.loc[idx]
 
 
-def efficient_frontier_region(frontier_df, allow_short=False):
+def efficient_frontier_region(frontier_df):
     """
     Extract the efficient frontier region:
-    portfolios at or above MVP return.
-    When allow_short=False, restricts to long-only rows (weight_region == 'long_only').
-    When allow_short=True, includes all weight regions.
+    long-only portfolios at or above MVP return.
 
     Parameters
     ----------
     frontier_df : pd.DataFrame  output of build_frontier()
-    allow_short : bool          whether short-selling is enabled
 
     Returns
     -------
-    pd.DataFrame  — filtered subset where region == 'efficient'
+    pd.DataFrame  — subset where region == 'efficient'
     dict          — summary stats for the region
     """
-    df = frontier_df if allow_short else frontier_df[frontier_df["weight_region"] == "long_only"]
-    eff_df = df[df["region"] == "efficient"].copy()
+    eff_df = frontier_df[frontier_df["region"] == "efficient"].copy()
 
     if eff_df.empty:
         return eff_df, {}
 
     peak_sr_row = eff_df.loc[eff_df["sharpe"].idxmax()]
-    mvp_row     = eff_df.loc[eff_df["ret"].idxmin()]
-    hi_ret_row  = eff_df.loc[eff_df["ret"].idxmax()]
 
     summary = {
         "w_A1_range":   (eff_df["w_A1"].max(), eff_df["w_A1"].min()),
@@ -377,8 +344,6 @@ def efficient_frontier_region(frontier_df, allow_short=False):
         "peak_w_A1":    peak_sr_row["w_A1"],
         "peak_w_A2":    peak_sr_row["w_A2"],
         "n_portfolios": len(eff_df),
-        "mvp_row":      mvp_row,
-        "hi_ret_row":   hi_ret_row,
     }
 
     return eff_df, summary
@@ -477,13 +442,13 @@ def cal_summary_table(r_risky, sd_risky, rf, allow_short=False):
 
     rows = []
     if allow_short:
-        rows.append(make_row("Short Risky (w = −1)",      -1.0))
+        rows.append(make_row("Short Risky Asset (w=−1)",   -1.0))
     rows += [
-        make_row("100% Risk-Free (w = 0)",                 0.0),
-        make_row("50% Risky / 50% RF (w = 0.5)",           0.5),
-        make_row("100% Risky Asset (w = 1)",                1.0),
-        make_row("150% Risky / −50% RF (w = 1.5)",         1.5),
-        make_row("200% Risky / −100% RF (w = 2) Leverage", 2.0),
+        make_row("100% Risk-Free (w=0)",                  0.0),
+        make_row("50% Risky (w=0.5)",                      0.5),
+        make_row("100% Risky Asset (w=1)",                  1.0),
+        make_row("150% Risky Asset (w=1.5) — Leverage",    1.5),
+        make_row("200% Risky Asset (w=2) — Leverage",      2.0),
     ]
 
     return pd.DataFrame(rows)

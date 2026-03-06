@@ -536,7 +536,7 @@ def _add_cal_key_markers(fig, r_risky, sd_risky, rf):
     points = [
         (0.0,  rf,                   0.0,        "100% Risk-Free",          COLORS["green"]),
         (sd_risky, r_risky,          sd_risky,   "100% Risky Asset",        COLORS["navy"]),
-        (2*sd_risky, 2*r_risky-rf,   2*sd_risky, "w=2 (Leverage)",         COLORS["red"]),
+        (2*sd_risky, 2*r_risky-rf,   2*sd_risky, "200% Risky Asset (Leverage)", COLORS["red"]),
     ]
     for sd_val, ret_val, _, label, color in points:
         w       = sd_val / sd_risky if sd_risky > 0 else 0
@@ -666,7 +666,7 @@ def chart_cal_long_with_leverage(cal_df, r_risky, sd_risky, rf):
     # Add 100% Risky and w=2 markers
     for w_val, label, color in [
         (1.0, "100% Risky Asset (start)", COLORS["navy"]),
-        (2.0, "w=2 (Max Leverage)",       COLORS["red"]),
+        (2.0, "200% Risky Asset (Max Leverage)", COLORS["red"]),
     ]:
         ret_val = w_val * r_risky + (1 - w_val) * rf
         sd_val  = w_val * sd_risky
