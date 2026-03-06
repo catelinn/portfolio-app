@@ -478,40 +478,46 @@ with tab1:
     )
 
     if eff_summary:
-        # Dynamic tooltip helpers — derive directions from actual values
-        w_a1_start = eff_summary['w_A1_range'][0] * 100
-        w_a1_end   = eff_summary['w_A1_range'][1] * 100
-        w_a2_start = eff_summary['w_A2_range'][0] * 100
-        w_a2_end   = eff_summary['w_A2_range'][1] * 100
-        sd_start   = eff_summary['sd_range'][0]
-        sd_end     = eff_summary['sd_range'][1]
-        ret_start  = eff_summary['ret_range'][0]
-        ret_end    = eff_summary['ret_range'][1]
-        pk_a1      = eff_summary['peak_w_A1'] * 100
-        pk_a2      = eff_summary['peak_w_A2'] * 100
+        # Derive tooltip values directly from frontier_df rows — always correct
+        # regardless of parameter settings or short-selling state.
+        # MVP row: lowest return in efficient region = starting point
+        # High-return endpoint: max_ret_lo (long-only) or max_ret_lev (leveraged)
+        mvp_row  = mvp
+        hi_row   = max_ret_lev if allow_short else max_ret_lo
 
-        w_a1_dir   = "increases" if w_a1_end > w_a1_start else "decreases"
-        w_a2_dir   = "increases" if w_a2_end > w_a2_start else "decreases"
-        sd_dir     = "increases" if sd_end > sd_start else "decreases"
-        ret_dir    = "increases" if ret_end > ret_start else "decreases"
-        # Endpoint label: describe the actual end weights, e.g. "200% A1 / -100% A2"
-        endpoint   = f"{w_a1_end:.0f}% A1 / {w_a2_end:.0f}% A2"
+        mvp_w_a1  = mvp_row["w_A1"] * 100
+        mvp_w_a2  = mvp_row["w_A2"] * 100
+        mvp_sd    = mvp_row["sd"]
+        mvp_ret   = mvp_row["ret"]
+
+        hi_w_a1   = hi_row["w_A1"] * 100
+        hi_w_a2   = hi_row["w_A2"] * 100
+        hi_sd     = hi_row["sd"]
+        hi_ret    = hi_row["ret"]
+
+        endpoint  = f"{hi_w_a1:.0f}% A1 / {hi_w_a2:.0f}% A2"
+        w_a1_dir  = "increases" if hi_w_a1 > mvp_w_a1 else "decreases"
+        w_a2_dir  = "increases" if hi_w_a2 > mvp_w_a2 else "decreases"
+        sd_dir    = "increases" if hi_sd > mvp_sd else "decreases"
+
+        pk_a1     = eff_summary['peak_w_A1'] * 100
+        pk_a2     = eff_summary['peak_w_A2'] * 100
 
         # Row 1: weight ranges + peak sharpe
         e1, e2, e3 = st.columns(3)
         e1.metric(
             "Asset 1 Weight Range",
-            f"{w_a1_start:.0f}%",
-            f"→ {w_a1_end:.0f}%",
-            help=(f"Asset 1 weight at MVP = {w_a1_start:.0f}%, "
-                  f"{w_a1_dir} to {w_a1_end:.0f}% at the high-return endpoint ({endpoint})"),
+            f"{eff_summary['w_A1_range'][0]*100:.0f}%",
+            f"→ {eff_summary['w_A1_range'][1]*100:.0f}%",
+            help=(f"Asset 1 weight at MVP = {mvp_w_a1:.0f}%, "
+                  f"{w_a1_dir} to {hi_w_a1:.0f}% at the high-return endpoint ({endpoint})"),
         )
         e2.metric(
             "Asset 2 Weight Range",
-            f"{w_a2_start:.0f}%",
-            f"→ {w_a2_end:.0f}%",
-            help=(f"Asset 2 weight at MVP = {w_a2_start:.0f}%, "
-                  f"{w_a2_dir} to {w_a2_end:.0f}% at the high-return endpoint ({endpoint})"),
+            f"{eff_summary['w_A2_range'][0]*100:.0f}%",
+            f"→ {eff_summary['w_A2_range'][1]*100:.0f}%",
+            help=(f"Asset 2 weight at MVP = {mvp_w_a2:.0f}%, "
+                  f"{w_a2_dir} to {hi_w_a2:.0f}% at the high-return endpoint ({endpoint})"),
         )
         e3.metric(
             "Peak Sharpe Ratio",
@@ -524,23 +530,23 @@ with tab1:
         e4, e5, e6 = st.columns(3)
         e4.metric(
             "Std. Dev. Range",
-            f"{sd_start:.2f}%",
-            f"→ {sd_end:.2f}%",
-            help=(f"Std. Dev. starts at {sd_start:.2f}% (MVP) and "
-                  f"{sd_dir} to {sd_end:.2f}% at the high-return endpoint ({endpoint})"),
+            f"{eff_summary['sd_range'][0]:.2f}%",
+            f"→ {eff_summary['sd_range'][1]:.2f}%",
+            help=(f"Std. Dev. at MVP = {mvp_sd:.2f}%, "
+                  f"{sd_dir} to {hi_sd:.2f}% at the high-return endpoint ({endpoint})"),
         )
         e5.metric(
             "Exp. Return Range",
-            f"{ret_start:.2f}%",
-            f"→ {ret_end:.2f}%",
-            help=(f"Exp. Return starts at {ret_start:.2f}% (MVP) and "
-                  f"{ret_dir} to {ret_end:.2f}% at the high-return endpoint ({endpoint})"),
+            f"{eff_summary['ret_range'][0]:.2f}%",
+            f"→ {eff_summary['ret_range'][1]:.2f}%",
+            help=(f"Exp. Return at MVP = {mvp_ret:.2f}%, "
+                  f"increases to {hi_ret:.2f}% at the high-return endpoint ({endpoint})"),
         )
         e6.metric(
             "Portfolios in Region",
             f"{eff_summary['n_portfolios']}",
-            help=(f"Number of portfolios with Exp. Return ≥ MVP return ({ret_start:.2f}%) — "
-                  f"Asset 1 weight from {w_a1_start:.0f}% (MVP) to {w_a1_end:.0f}% ({endpoint})"),
+            help=(f"Number of portfolios with Exp. Return ≥ MVP return ({mvp_ret:.2f}%) — "
+                  f"Asset 1 weight from {mvp_w_a1:.0f}% (MVP) to {hi_w_a1:.0f}% ({endpoint})"),
         )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
