@@ -172,6 +172,19 @@ def build_frontier(r1, sd1, r2, sd2, rho, rf,
             return "long_only"
 
     df["weight_region"] = df.apply(assign_weight_region, axis=1)
+
+    # chart_region: strict marker ownership — boundaries (w=0, w=1) belong to chart2 only.
+    # chart3 = strictly w < 0; chart4 = strictly w > 1.
+    def assign_chart_region(row):
+        w = row["w_A1"]
+        if w < 0:
+            return "chart3"
+        elif w > 1:
+            return "chart4"
+        else:
+            return "chart2"
+
+    df["chart_region"] = df.apply(assign_chart_region, axis=1)
     return df
 
 
