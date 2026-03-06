@@ -164,6 +164,27 @@ def _add_mvp_marker(fig, mvp):
     return fig
 
 
+def _add_dominated_line(fig, frontier_df):
+    """Add red dashed dominated region line to any frontier chart."""
+    df_dom = frontier_df[frontier_df["region"] == "dominated"].sort_values("w_A1", ascending=False)
+    if df_dom.empty:
+        return fig
+    fig.add_trace(go.Scatter(
+        x=df_dom["sd"], y=df_dom["ret"],
+        mode="lines",
+        name=REGION_LABELS["dominated"],
+        line=dict(color=COLORS["dominated"], width=2, dash="dash"),
+        customdata=list(zip(
+            [REGION_LABELS["dominated"]] * len(df_dom),
+            df_dom["w_A1"] * 100,
+            df_dom["w_A2"] * 100,
+            df_dom["sharpe"],
+        )),
+        hovertemplate=_hover_frontier(),
+    ))
+    return fig
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 1 — PORTFOLIO FRONTIER CHARTS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -194,6 +215,7 @@ def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
             hovertemplate=_hover_frontier(),
         ))
 
+    fig = _add_dominated_line(fig, frontier_df)
     fig = _add_mvp_marker(fig, mvp)
     fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
 
@@ -248,7 +270,7 @@ def chart_frontier_efficient_dominated(frontier_df, r1, sd1, r2, sd2, mvp):
     )
 
     fig.update_layout(_base_layout(
-        title="Efficient Frontier vs. Dominated Portfolios",
+        title="Long Only",
         xaxis_title="Portfolio Std. Dev. (%)",
         yaxis_title="Portfolio Exp. Return (%)",
         subtitle="Asset 1 Weight: 0% → 100%  |  Asset 2 Weight: 0% → 100%",
@@ -259,7 +281,7 @@ def chart_frontier_efficient_dominated(frontier_df, r1, sd1, r2, sd2, mvp):
 def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
     """
     Chart 3 — Short Asset 1 / Long Asset 2 (requires short-selling ON).
-    Region where w_A1 < 0 — highest returns but highest variance.
+    Region where w_A1 < 0. Dominated only when r2 < r1 (Asset 2 lower return).
     """
     df_r = frontier_df[frontier_df["region"] == "short_A1"].sort_values("sd")
     fig  = go.Figure()
@@ -279,7 +301,19 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
             hovertemplate=_hover_frontier(),
         ))
 
+    fig = _add_dominated_line(fig, frontier_df)
     fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
+
+    # Dynamic annotation — only show if this region is actually dominated
+    if r2 < r1:
+        fig.add_annotation(
+            text="⚠ Dominated region — same risk as portfolios<br>above MVP but lower return",
+            xref="paper", yref="paper", x=0.5, y=0.05,
+            showarrow=False,
+            font=dict(size=11, color=COLORS["red"]),
+            bgcolor="rgba(255,200,200,0.3)",
+            bordercolor=COLORS["red"], borderwidth=1,
+        )
 
     fig.update_layout(_base_layout(
         title="Short Asset 1 / Long Asset 2",
@@ -293,7 +327,7 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
 def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
     """
     Chart 4 — Long Asset 1 / Short Asset 2 (requires short-selling ON).
-    Region where w_A1 > 1 — dominated: high risk, low return.
+    Region where w_A1 > 1. Dominated only when r1 < r2 (default case).
     """
     df_r = frontier_df[frontier_df["region"] == "long_A1"].sort_values("sd")
     fig  = go.Figure()
@@ -313,20 +347,22 @@ def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
             hovertemplate=_hover_frontier(),
         ))
 
+    fig = _add_dominated_line(fig, frontier_df)
     fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
 
-    # Warning annotation
-    fig.add_annotation(
-        text="⚠ Dominated region — same risk as portfolios<br>above MVP but lower return",
-        xref="paper", yref="paper", x=0.5, y=0.05,
-        showarrow=False,
-        font=dict(size=11, color=COLORS["red"]),
-        bgcolor="rgba(255,200,200,0.3)",
-        bordercolor=COLORS["red"], borderwidth=1,
-    )
+    # Dynamic annotation — only show if this region is actually dominated
+    if r1 < r2:
+        fig.add_annotation(
+            text="⚠ Dominated region — same risk as portfolios<br>above MVP but lower return",
+            xref="paper", yref="paper", x=0.5, y=0.05,
+            showarrow=False,
+            font=dict(size=11, color=COLORS["red"]),
+            bgcolor="rgba(255,200,200,0.3)",
+            bordercolor=COLORS["red"], borderwidth=1,
+        )
 
     fig.update_layout(_base_layout(
-        title="Long Asset 1 / Short Asset 2 — Dominated",
+        title="Long Asset 1 / Short Asset 2",
         xaxis_title="Portfolio Std. Dev. (%)",
         yaxis_title="Portfolio Exp. Return (%)",
         subtitle="Asset 1 Weight: 100% → 200%  |  Asset 2 Weight: −100% → 0%",

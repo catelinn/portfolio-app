@@ -210,18 +210,16 @@ with st.sidebar:
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
     st.markdown("<div class='sidebar-section'>Quick Presets</div>",
                 unsafe_allow_html=True)
-    preset_cols = st.columns(2)
+    preset_cols = st.columns(3)
     with preset_cols[0]:
-        if st.button("Default", use_container_width=True):
+        if st.button("Baseline", use_container_width=True):
             apply_preset(DEFAULTS)
             st.rerun()
-        if st.button("ρ = 0", use_container_width=True):
-            apply_preset({**DEFAULTS, "f_rho": 0.0})
-            st.rerun()
     with preset_cols[1]:
-        if st.button("Assignment 1\n(ρ = −0.8)", use_container_width=True):
-            apply_preset({**DEFAULTS, "f_rho": -0.8})
+        if st.button("ρ = 1", use_container_width=True):
+            apply_preset({**DEFAULTS, "f_rho": 1.0})
             st.rerun()
+    with preset_cols[2]:
         if st.button("ρ = −1", use_container_width=True):
             apply_preset({**DEFAULTS, "f_rho": -1.0})
             st.rerun()
@@ -328,7 +326,7 @@ with tab1:
             f_r1  = st.slider("Exp. Return (%)",  0.0, 25.0, _val("f_r1"),  0.5, key="f_r1")
             f_sd1 = st.slider("Std. Dev. (%)",    5.0, 60.0, _val("f_sd1"), 1.0, key="f_sd1")
         with pc2:
-            st.markdown("**Asset 2**")
+            st.markdown("**Asset 2 (more risky)**")
             f_r2   = st.slider("Exp. Return (%) ", 0.0, 30.0, _val("f_r2"), 0.5, key="f_r2")
             sd2_min = f_sd1 + 1.0
             sd2_val = max(_val("f_sd2"), sd2_min)
@@ -414,7 +412,7 @@ with tab1:
                         benchmarks['asset1']['sd'],
                         benchmarks['asset1']['sharpe'],
                         border_color="#1F4E79")
-    c2 = benchmark_card("100% Asset 2",
+    c2 = benchmark_card("100% Asset 2 (more risky)",
                         benchmarks['asset2']['ret'],
                         benchmarks['asset2']['sd'],
                         benchmarks['asset2']['sharpe'],
@@ -775,7 +773,7 @@ with tab3:
             f_r1  = st.slider("Exp. Return (%)",  0.0, 25.0, st.session_state.f_r1,  0.5, key="rho_f_r1",  on_change=lambda: st.session_state.update(f_r1=st.session_state.rho_f_r1))
             f_sd1 = st.slider("Std. Dev. (%)",    5.0, 60.0, st.session_state.f_sd1, 1.0, key="rho_f_sd1", on_change=lambda: st.session_state.update(f_sd1=st.session_state.rho_f_sd1))
         with rc2:
-            st.markdown("**Asset 2**")
+            st.markdown("**Asset 2 (more risky)**")
             f_r2  = st.slider("Exp. Return (%) ", 0.0, 30.0, _val("f_r2"),  0.5, key="rho_f_r2",  on_change=lambda: st.session_state.update(f_r2=st.session_state.rho_f_r2))
             f_sd2 = st.slider("Std. Dev. (%)  ",  _val("f_sd1")+1, 80.0, _val("f_sd2"), 1.0, key="rho_f_sd2", on_change=lambda: st.session_state.update(f_sd2=st.session_state.rho_f_sd2))
         with rc3:
