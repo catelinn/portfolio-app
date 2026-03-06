@@ -556,7 +556,7 @@ def _add_cal_key_markers(fig, cal_df, r_risky, sd_risky, rf):
             text=["-100% Risky Asset (Short-Selling)"], textposition="top right",
             textfont=dict(size=10, color="#7B2D8B"),
             name="-100% Risky Asset (Short-Selling)",
-            customdata=[["-100% Risky Asset (Short-Selling)", w*100, w_rf*100, sharpe]],
+            customdata=[["200% Risk Free, -100% Risky (Short-Selling)", w*100, w_rf*100, sharpe]],
             hovertemplate=_hover_cal(),
             showlegend=True,
         ))
