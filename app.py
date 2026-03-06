@@ -689,7 +689,7 @@ with tab2:
     p4.metric("w = 2  (200% Risky, 100% Borrowed)",
               f"{2*c_r_risky - c_rf:.2f}%",
               f"σ = {2*c_sd_risky:.2f}%",
-              help="Borrow 100% at rf to double risky exposure")
+              help="Borrow 100% at risk free to double risky exposure")
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
