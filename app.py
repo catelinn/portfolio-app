@@ -661,7 +661,7 @@ with tab2:
     st.markdown("#### CAL Metrics")
     st.caption(
         "Metrics shown are for long allocations only (Risky Asset Weight: 0% → 200%). "
-        "Short-selling region (w < 0) is visible in the 'All Allocations' chart but excluded from the metric cards above."
+        "Short-selling region (w < 0) is visible in the 'All Allocations' chart but excluded from the metric cards."
     )
 
     # Row 1 — Sharpe, risk-free rate
