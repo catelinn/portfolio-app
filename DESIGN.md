@@ -1,0 +1,461 @@
+# Portfolio Frontier & CAL Explorer
+## Design & Requirements Document
+
+**Course:** FIN 511 — Investments I: Fundamentals of Performance Evaluation  
+**Module:** 1 — Lesson 1-5: Portfolio Choice in General Settings  
+**Version:** 1.0 | March 2026
+
+---
+
+## Table of Contents
+
+1. [Project Overview](#1-project-overview)
+2. [Application Structure](#2-application-structure)
+3. [Sidebar Design](#3-sidebar-design)
+4. [Tab 1 — Portfolio Frontier](#4-tab-1--portfolio-frontier)
+5. [Tab 2 — Capital Allocation Line](#5-tab-2--capital-allocation-line)
+6. [Tab 3 — Correlation Effect](#6-tab-3--correlation-effect)
+7. [Display Terminology](#7-display-terminology)
+8. [Core Calculations](#8-core-calculations)
+9. [Future Enhancements](#9-future-enhancements)
+10. [Change Log](#10-change-log)
+
+---
+
+## 1. Project Overview
+
+### 1.1 Purpose
+
+Interactive web application for exploring portfolio theory concepts from FIN 511 Module 1.  
+Allows real-time adjustment of asset parameters to see how they affect the efficient frontier and Capital Allocation Lines.
+
+### 1.2 Tech Stack
+
+| Component | Tool | Purpose |
+|---|---|---|
+| UI Framework | Streamlit | Interactive web app — sliders, tabs, layout. No JavaScript needed |
+| Charts | Plotly | Interactive charts with hover tooltips, zoom, and pan |
+| Math | NumPy | Portfolio calculations — variance, std dev, Sharpe ratio |
+| Data | Pandas | DataFrames for frontier and CAL data |
+| Language | Python | All code — calculations, charts, and UI |
+| Deployment | Streamlit Community Cloud + GitHub | Free hosting, shareable public URL |
+
+### 1.3 File Structure
+
+```
+portfolio_app/
+├── app.py              # Main entry point, Streamlit UI, tab layout
+├── calculations.py     # Pure math functions, no UI dependencies
+├── charts.py           # Plotly figure builders, one function per chart
+├── requirements.txt    # Dependencies for Streamlit Cloud deployment
+└── DESIGN.md           # This file
+```
+
+### 1.4 Deployment
+
+- Code stored in a **public GitHub repository** (MIT license)
+- **Streamlit Community Cloud** connected to the GitHub repo
+- Every save to GitHub auto-redeploys the app within ~30 seconds
+- Shareable URL format: `https://yourname-portfolio-app.streamlit.app`
+- Browser editor: `github.dev/yourname/portfolio-app` (no local install needed)
+
+---
+
+## 2. Application Structure
+
+### 2.1 Overall Layout
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Header: App title + subtitle                               │
+├──────────────┬──────────────────────────────────────────────┤
+│              │  Tab 1: Portfolio Frontier                   │
+│   SIDEBAR    │  Tab 2: Capital Allocation Line              │
+│  (controls)  │  Tab 3: Correlation Effect                   │
+│              │                                              │
+└──────────────┴──────────────────────────────────────────────┘
+```
+
+### 2.2 Tab Structure
+
+| Tab | Content | Uses Parameters From |
+|---|---|---|
+| Tab 1 — Portfolio Frontier | 4 charts + metrics rows + summary table | Frontier sidebar section |
+| Tab 2 — Capital Allocation Line | 5 charts + metrics row + summary table | CAL sidebar section |
+| Tab 3 — Correlation Effect | 1 multi-line chart + MVP comparison table | Frontier sidebar section (ρ slider) |
+
+### 2.3 Data Flow
+
+```
+User moves slider / toggles checkbox
+         ↓
+app.py reads new params from st.sidebar
+         ↓
+calculations.py recomputes all DataFrames
+         ↓
+charts.py builds new Plotly figures
+         ↓
+Streamlit re-renders only changed components
+```
+
+---
+
+## 3. Sidebar Design
+
+### 3.1 Layout
+
+```
+SIDEBAR
+│
+├── ☐ Allow Short-Selling        (checkbox, default: OFF)
+│   Affects Tab 1 and Tab 2 only
+│
+├── 📊 PORTFOLIO FRONTIER
+│   ├── Asset 1
+│   │   ├── Expected Return (%)  slider: 0–25%,      default 8%
+│   │   └── Std. Deviation (%)   slider: 5–60%,      default 25%
+│   ├── Asset 2
+│   │   ├── Expected Return (%)  slider: 0–30%,      default 15%
+│   │   └── Std. Deviation (%)   slider: sd1+1–80%,  default 50%
+│   ├── Correlation (ρ)          slider: -1 to +1,   default 0.4
+│   └── Risk-Free Rate (%)       slider: 0–10%,      default 3%
+│       note: "Used for Sharpe ratio calculation only"
+│
+└── 📈 CAPITAL ALLOCATION LINE
+    ├── Risky Asset
+    │   ├── Expected Return (%)  slider: 0–25%,      default 8%
+    │   └── Std. Deviation (%)   slider: 5–60%,      default 25%
+    └── Risk-Free Rate (%)       slider: 0–10%,      default 3%
+        note: "T-Bill rate — zero std. dev. by definition"
+```
+
+> **Note:** Frontier and CAL parameters are independent — changing one does not affect the other.
+
+### 3.2 Parameter Validation — Asset 2 Std. Deviation
+
+| Rule | Behaviour | Implementation |
+|---|---|---|
+| Asset 2 Std. Dev. ≥ Asset 1 Std. Dev. + 1% | Slider minimum dynamically set to `sd1 + 1` | `min_value = sd1 + 1` in `st.slider()` |
+| If sd2 < sd1 + 1 after sd1 is raised | sd2 snaps up to sd1 + 1 automatically | `value = max(sd2, sd1 + 1)` |
+| Notice shown when snap occurs | `st.info()` message displayed | `if sd2_prev < sd1 + 1: st.info(...)` |
+
+**Notice message text:**
+> ℹ️ Asset 2 Std. Dev. has been adjusted upward to maintain the constraint that Asset 2 must be riskier than Asset 1.
+
+### 3.3 Session State Keys
+
+| Key | Type | Purpose |
+|---|---|---|
+| `sd2` | float | Remembers Asset 2 Std. Dev. across rerenders for snap validation |
+| `frontier_rf` | float | Risk-free rate for Frontier tab (Sharpe calculation only) |
+| `cal_rf` | float | Risk-free rate for CAL tab |
+| `allow_short` | bool | Short-selling checkbox state |
+
+---
+
+## 4. Tab 1 — Portfolio Frontier
+
+### 4.1 Metrics — Top of Tab
+
+#### Row 1 — Benchmark Portfolios
+
+Three side-by-side cards:
+
+| Card | Asset 1 Weight | Asset 2 Weight | Metrics Shown |
+|---|---|---|---|
+| Asset 1 Only | 100% | 0% | Exp. Return, Std. Dev., Sharpe Ratio |
+| Asset 2 Only | 0% | 100% | Exp. Return, Std. Dev., Sharpe Ratio |
+| Equal Weight | 50% | 50% | Exp. Return, Std. Dev., Sharpe Ratio |
+
+#### Row 2 — Optimal Portfolio Cards (styled like MVP card)
+
+| Card | Condition | Shown When |
+|---|---|---|
+| ⭐ Min. Variance Portfolio | Lowest achievable Std. Dev. | Always |
+| ⭐ Max. Sharpe Portfolio | Highest Sharpe Ratio (long-only) | Always |
+| ⭐ Max. Return (Long Only) | Asset 2 Weight = 100% | Always |
+| ⭐ Max. Return (Leveraged) | Asset 2 Weight = 200%, Asset 1 Weight = −100% | Short-selling ON only |
+
+Each card displays: **Asset 1 Weight, Asset 2 Weight, Exp. Return, Std. Dev., Sharpe Ratio**
+
+#### Row 3 — Efficient Frontier Region Summary
+
+**Definition:** Long-only portfolios above MVP (Asset 1 Weight: 0%→100%, Exp. Return ≥ MVP Exp. Return)
+
+> Based on Prof. Weisbenner's lecture — efficient frontier is always presented as long-only in Module 1.
+
+| Field | Example | Notes |
+|---|---|---|
+| Asset 1 Weight range | 94.0% → 0.0% | From MVP down to 100% Asset 2 |
+| Asset 2 Weight range | 6.0% → 100.0% | From MVP up to 100% Asset 2 |
+| Std. Dev. range | 24.85% → 50.00% | From MVP to 100% Asset 2 |
+| Exp. Return range | 8.50% → 15.00% | From MVP to 100% Asset 2 |
+| Peak Sharpe Ratio | 0.272 | Highest SR within efficient region |
+| Peak Sharpe at | Asset 1 Weight=88%, Asset 2 Weight=12% | Weights at max Sharpe |
+| Number of portfolios | 94 | Count of data points in efficient region |
+
+### 4.2 Charts
+
+| Chart | Asset 1 Weight Range | Asset 2 Weight Range | Short-Selling Required | Visible When |
+|---|---|---|---|---|
+| All Allocations | −100% → +200% | +200% → −100% | Yes | Short-selling ON only |
+| Efficient vs Dominated | 0% → 100% | 0% → 100% | No | Always |
+| Short A1 / Long A2 | −100% → 0% | 100% → 200% | Yes | Short-selling ON only |
+| Long A1 / Short A2 | 100% → 200% | −100% → 0% | Yes | Short-selling ON only |
+
+### 4.3 Short-Selling Checkbox Behaviour
+
+#### Short-Selling OFF (default)
+
+> ℹ️ **Short-selling is currently disabled.** Only portfolios with Asset 1 Weight: 0%→100% and Asset 2 Weight: 0%→100% are shown. This reflects the real-world constraint most investors face in 401k plans and standard brokerage accounts. Enable short-selling above to see the full frontier including leveraged allocations.
+
+- Charts shown: **Efficient vs Dominated only** (1 chart)
+- Metrics Row 2: **3 cards** — Min. Variance Portfolio, Max. Sharpe, Max. Return (Long Only)
+
+#### Short-Selling ON
+
+> ⚠️ **Short-selling is enabled.** Charts now show all allocations including: Short A1 / Long A2 (Asset 1 Weight < 0%) and Long A1 / Short A2 (Asset 1 Weight > 100%). Note: Short-selling requires a margin account and involves borrowing costs not reflected here. This simple example ignores margin and collateral requirements (per Prof. Weisbenner, Lesson 1-2.5).
+
+- Charts shown: **All 4 charts**
+- Metrics Row 2: **4 cards** — Min. Variance Portfolio, Max. Sharpe, Max. Return (Long Only), Max. Return (Leveraged)
+
+### 4.4 Hover Tooltip
+
+```
+Asset 1 Weight:      94.0%
+Asset 2 Weight:       6.0%
+────────────────────────────
+Exp. Return:          8.50%
+Std. Dev.:           24.85%
+Sharpe Ratio:         0.228
+```
+
+### 4.5 Summary Table — Bottom of Tab
+
+Key allocation points: 100% A1, Min. Variance Portfolio, Max. Sharpe, Equal Weight (50/50), 100% A2, Max. Return (Long Only), Max. Return (Leveraged — if short-selling ON)
+
+| Column | Label in Table | Format |
+|---|---|---|
+| `w_A1` | Asset 1 Weight | XX.X% |
+| `w_A2` | Asset 2 Weight | XX.X% |
+| `ret` | Exp. Return | XX.XX% |
+| `sd` | Std. Dev. | XX.XX% |
+| `sharpe` | Sharpe Ratio | X.XXX |
+| `region` | Region | Text label |
+
+---
+
+## 5. Tab 2 — Capital Allocation Line
+
+### 5.1 Metrics — Top of Tab
+
+| Metric | Formula | Example |
+|---|---|---|
+| Sharpe Ratio | (Exp. Return − Risk-Free Rate) / Std. Dev. | 0.200 |
+| CAL Equation | Exp. Return = rf + SR × Std. Dev. | Exp. Return = 3% + 0.200 × Std. Dev. |
+| 100% Risk-Free point | w=0: Exp. Return=rf, Std. Dev.=0% | Exp. Return=3%, Std. Dev.=0% |
+| 100% Risky point | w=1: Exp. Return=r, Std. Dev.=σ | Exp. Return=8%, Std. Dev.=25% |
+| w=2 Leverage point | w=2: Exp. Return=2r−rf, Std. Dev.=2σ | Exp. Return=13%, Std. Dev.=50% |
+
+### 5.2 Charts — Order and Ranges
+
+| # | Chart Title | Risky Asset Weight | Risk-Free Weight | Short-Selling Required | Visible When |
+|---|---|---|---|---|---|
+| 1 | All Allocations | −100% → +200% | +200% → −100% | Yes | Short-selling ON only |
+| 2 | All Long | 0% → +200% | +100% → −100% | No | Always |
+| 3 | Long Without Leverage | 0% → +100% | +100% → 0% | No | Always |
+| 4 | Long With Leverage | +100% → +200% | 0% → −100% | No | Always |
+| 5 | Equation Summary | — | — | No | Always |
+
+### 5.3 Short-Selling Checkbox Behaviour
+
+#### Short-Selling OFF
+
+> ℹ️ **Short-selling disabled.** CAL shown for long positions only (Risky Asset Weight ≥ 0%). The "All Allocations" chart (which includes Risky Asset Weight < 0%, i.e. shorting the risky asset to invest more in T-Bills) is hidden.
+
+- Charts 2–5 shown (All Allocations hidden)
+
+#### Short-Selling ON
+
+> ⚠️ **Short-selling enabled.** "All Allocations" chart now includes Risky Asset Weight < 0%: shorting the risky asset to put more than 100% into T-Bills. Note: negative Sharpe in this region — you earn less than the risk-free rate.
+
+- All 5 charts shown
+
+### 5.4 Hover Tooltip
+
+```
+Risky Asset Weight:   70.0%
+Risk-Free Weight:     30.0%
+────────────────────────────
+Exp. Return:           6.50%
+Std. Dev.:            17.50%
+Sharpe Ratio:          0.200
+
+── Leverage region (Risky Asset Weight > 100%): ──
+Risky Asset Weight:  150.0%
+Risk-Free Weight:    -50.0%    ← negative = borrowing at rf
+────────────────────────────
+Exp. Return:          10.50%
+Std. Dev.:            37.50%
+Sharpe Ratio:          0.200
+```
+
+### 5.5 Summary Table — Bottom of Tab
+
+Key w points: w=−1 (if short ON), w=0, w=0.5, w=1, w=1.5, w=2
+
+| Column | Label in Table | Format |
+|---|---|---|
+| `w_risky` | Risky Asset Weight | XX.X% |
+| `w_rf` | Risk-Free Weight | XX.X% |
+| `ret` | Exp. Return | XX.XX% |
+| `sd` | Std. Dev. | XX.XX% |
+| `sharpe` | Sharpe Ratio | X.XXX |
+| `region` | Region | Text label |
+
+---
+
+## 6. Tab 3 — Correlation Effect
+
+### 6.1 Metrics — Top of Tab
+
+| Metric | Description |
+|---|---|
+| Current ρ | Value of the correlation slider |
+| Min. Variance Portfolio Std. Dev. at ρ=−1 | Lowest achievable risk with perfect negative correlation |
+| Min. Variance Portfolio Std. Dev. at ρ=0 | Risk at zero correlation |
+| Min. Variance Portfolio Std. Dev. at ρ=+1 | Risk at perfect positive correlation (= weighted avg of σ) |
+
+### 6.2 Charts
+
+#### Chart 1 — Overlaid Frontiers
+
+- Five efficient frontiers plotted simultaneously for ρ = −0.8, −0.4, 0, +0.4, +0.8
+- Current ρ frontier shown with **thicker line, full opacity**
+- Other ρ frontiers shown with **dashed lines, reduced opacity**
+- Always long-only (Asset 1 & Asset 2 Weights: 0%→100%) regardless of short-selling checkbox
+
+> ℹ️ Correlation frontiers always displayed as long-only regardless of the short-selling setting. This is consistent with how Prof. Weisbenner presents correlation effects in Lesson 1-5.
+
+#### Chart 2 — MVP Comparison Table
+
+| ρ Value | Asset 1 Weight | Asset 2 Weight | Std. Dev. | Exp. Return |
+|---|---|---|---|---|
+| −0.8 | XX.X% | XX.X% | XX.XX% | XX.XX% |
+| −0.4 | XX.X% | XX.X% | XX.XX% | XX.XX% |
+| 0.0 | XX.X% | XX.X% | XX.XX% | XX.XX% |
+| +0.4 ← current | XX.X% | XX.X% | XX.XX% | XX.XX% |
+| +0.8 | XX.X% | XX.X% | XX.XX% | XX.XX% |
+
+Current ρ row highlighted. Lower ρ → lower MVP Std. Dev. → more diversification benefit.
+
+---
+
+## 7. Display Terminology
+
+### 7.1 Rules
+
+- **Drop "Portfolio" prefix** when context is already clear (inside cards, tables, tooltips)
+- **Keep "Portfolio" prefix** on chart axis labels and standalone messages
+- Asset-level slider labels use `Exp. Return` and `Std. Dev.` without "Portfolio"
+
+### 7.2 Full Reference
+
+| Internal Variable | Short Label (cards / tooltips) | Full Label (chart axes) |
+|---|---|---|
+| `w_A1` | Asset 1 Weight | Asset 1 Weight (%) |
+| `w_A2` | Asset 2 Weight | Asset 2 Weight (%) |
+| `w_risky` | Risky Asset Weight | Risky Asset Weight (%) |
+| `w_rf` | Risk-Free Weight | Risk-Free Weight (%) |
+| `ret` | Exp. Return | Portfolio Exp. Return (%) |
+| `sd` | Std. Dev. | Portfolio Std. Dev. (%) |
+| `sharpe` | Sharpe Ratio | Sharpe Ratio |
+| `rho` / `ρ` | Correlation (ρ) | Correlation (ρ) |
+| `mvp` | Min. Variance Portfolio | — |
+| `r1` | Asset 1 Exp. Return | — |
+| `r2` | Asset 2 Exp. Return | — |
+| `sd1` | Asset 1 Std. Dev. | — |
+| `sd2` | Asset 2 Std. Dev. | — |
+| `rf` | Risk-Free Rate | — |
+
+---
+
+## 8. Core Calculations
+
+### 8.1 calculations.py — Functions
+
+| Function | Inputs | Returns | Used In |
+|---|---|---|---|
+| `portfolio_stats(w, r1, sd1, r2, sd2, rho, rf)` | weight + asset params | `(Exp. Return, Std. Dev., Sharpe)` | frontier builder |
+| `build_frontier(params)` | all frontier params | DataFrame: `w, ret, sd, sharpe, region` | Tab 1 |
+| `build_cal(r_risky, sd_risky, rf)` | CAL params | DataFrame: `w_risky, w_rf, ret, sd, sharpe, region` | Tab 2 |
+| `build_rho_frontiers(params, rho_list)` | frontier params + list of ρ values | `dict {ρ: DataFrame}` | Tab 3 |
+| `find_mvp(frontier_df)` | frontier DataFrame | Row with minimum Std. Dev. | Metrics |
+| `find_max_sharpe(frontier_df)` | frontier DataFrame | Row with maximum Sharpe Ratio | Metrics |
+
+### 8.2 Key Formulas
+
+| Formula | Expression |
+|---|---|
+| Portfolio Exp. Return | `E[Rp] = w × r1 + (1−w) × r2` |
+| Portfolio Variance | `σ²p = w²σ₁² + (1−w)²σ₂² + 2w(1−w)ρσ₁σ₂` |
+| Portfolio Std. Dev. | `σp = √(σ²p)` |
+| Sharpe Ratio | `SR = (E[Rp] − rf) / σp` |
+| CAL Exp. Return | `E[Rp] = rf + SR × σp` |
+| CAL Std. Dev. | `σp = |w| × σ_risky` |
+| MVP Weight (Asset 1) | `w* = (σ₂² − ρσ₁σ₂) / (σ₁² + σ₂² − 2ρσ₁σ₂)` |
+
+### 8.3 DataFrame Columns
+
+#### `frontier_df`
+
+| Column | Type | Description |
+|---|---|---|
+| `w_A1` | float | Weight in Asset 1 (e.g. 0.94 = 94%) |
+| `w_A2` | float | Weight in Asset 2 (= 1 − w_A1) |
+| `ret` | float | Portfolio Exp. Return (%) |
+| `sd` | float | Portfolio Std. Dev. (%) |
+| `sharpe` | float | Sharpe Ratio |
+| `region` | str | `"efficient"`, `"dominated"`, `"short_A1"`, `"long_A1"` |
+
+#### `cal_df`
+
+| Column | Type | Description |
+|---|---|---|
+| `w_risky` | float | Weight in risky asset |
+| `w_rf` | float | Weight in risk-free asset (= 1 − w_risky) |
+| `ret` | float | Portfolio Exp. Return (%) |
+| `sd` | float | Portfolio Std. Dev. (%) |
+| `sharpe` | float | Sharpe Ratio |
+| `region` | str | `"short"`, `"long_no_lev"`, `"long_lev"` |
+
+---
+
+## 9. Future Enhancements
+
+Items to consider for future versions:
+
+| # | Enhancement | Complexity | Notes |
+|---|---|---|---|
+| 1 | Add 3rd asset to frontier | Medium | Extends to N-asset efficient frontier — needed for Assignment 2 (gold, international) |
+| 2 | Export charts as PNG / PDF | Low | Plotly supports download buttons natively |
+| 3 | Save / load parameter presets | Low | Store in JSON or Streamlit session state |
+| 4 | Show tangency portfolio on CAL | Low | Where CAL is tangent to efficient frontier — foundation for CAPM in Module 2 |
+| 5 | Expense ratio comparison (dominated fund) | Low | Real-world application from Lesson 1-5.4 |
+| 6 | Module 2 CAPM extension | High | Beta, Security Market Line, alpha — after Module 2 lectures |
+| 7 | Animate frontier as ρ slider moves | Medium | Real-time frontier shifting with correlation changes |
+| 8 | Mobile responsive layout | Medium | Streamlit mobile layout adjustments |
+
+---
+
+## 10. Change Log
+
+| Version | Date | Change |
+|---|---|---|
+| 1.0 | March 2026 | Initial design document — all requirements locked before coding begins |
+
+> **How to update:** Add a new row to this table whenever a design decision changes, noting what changed and why. Commit the updated `DESIGN.md` in the same pull request as the code change.
+
+---
+
+*Portfolio Frontier & CAL Explorer — Design & Requirements Document v1.0*
