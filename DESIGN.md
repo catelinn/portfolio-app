@@ -3,7 +3,7 @@
 
 **Course:** FIN 511 — Investments I: Fundamentals of Performance Evaluation  
 **Module:** 1 — Lesson 1-5: Portfolio Choice in General Settings  
-**Version:** 2.4 | March 2026
+**Version:** 2.5 | March 2026
 
 ---
 
@@ -533,6 +533,7 @@ Items to consider for future versions:
 | 2.2 | March 2026 | Fixed Efficient Frontier Region tooltip endpoint labels — removed hardcoded "100% Asset 1/2" assumption; all 6 metric tooltips now derive endpoint from actual w_A1_range/w_A2_range end values (e.g. "200% A1 / -100% A2" when short-selling is on) |
 | 2.3 | March 2026 | Replaced eff_summary tuple-based tooltip helpers with direct frontier_df row lookups — mvp row for start point, max_ret_lev (short-selling on) or max_ret_lo (long-only) for high-return endpoint; correct for all parameter combinations without any tuple ordering assumptions |
 | 2.4 | March 2026 | Added mvp_row (ret.idxmin()) and hi_ret_row (ret.idxmax()) to eff_summary in calculations.py; EFR card display and tooltips now sourced entirely from these rows — Asset 1/2 Weight Range always shows MVP value → high-return endpoint value regardless of which asset has higher return |
+| 2.5 | March 2026 | Added allow_short parameter to efficient_frontier_region(); filters to weight_region == "long_only" when False, uses full frontier df when True — EFR card now correctly reflects the active weight range in both modes; build_frontier() column assignments unchanged |
 
 > **How to update:** Add a new row to this table whenever a design decision changes, noting what changed and why. Commit the updated `DESIGN.md` in the same pull request as the code change.
 
