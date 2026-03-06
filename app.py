@@ -379,28 +379,62 @@ with tab1:
 
     # ── METRICS ROW 1 — Benchmark portfolios ────────────────────────────────
     st.markdown("#### Benchmark Portfolios")
-    col1, col2, col3 = st.columns(3)
 
-    with col1:
-        st.markdown("**100% Asset 1**")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Exp. Return",  f"{benchmarks['asset1']['ret']:.2f}%")
-        m2.metric("Std. Dev.",    f"{benchmarks['asset1']['sd']:.2f}%")
-        m3.metric("Sharpe Ratio", f"{benchmarks['asset1']['sharpe']:.3f}")
+    def benchmark_card(title, ret, sd, sharpe, border_color="#2E75B6"):
+        """Render a benchmark portfolio as a compact HTML card."""
+        return f"""
+        <div style="
+            background:#F8FBFF;
+            border:1px solid #BDD7EE;
+            border-top:4px solid {border_color};
+            border-radius:8px;
+            padding:14px 18px;
+            flex:1;
+        ">
+            <div style="font-weight:700;font-size:0.92rem;color:#1F4E79;
+                        margin-bottom:12px;">{title}</div>
+            <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+                <tr>
+                    <td style="color:#595959;padding:3px 0;">Exp. Return</td>
+                    <td style="text-align:right;font-weight:700;
+                               font-family:monospace;color:#1F4E79;">
+                        {ret:.2f}%</td>
+                </tr>
+                <tr>
+                    <td style="color:#595959;padding:3px 0;">Std. Dev.</td>
+                    <td style="text-align:right;font-weight:700;
+                               font-family:monospace;color:#1F4E79;">
+                        {sd:.2f}%</td>
+                </tr>
+                <tr>
+                    <td style="color:#595959;padding:3px 0;">Sharpe Ratio</td>
+                    <td style="text-align:right;font-weight:700;
+                               font-family:monospace;color:#1F4E79;">
+                        {sharpe:.3f}</td>
+                </tr>
+            </table>
+        </div>"""
 
-    with col2:
-        st.markdown("**100% Asset 2**")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Exp. Return",  f"{benchmarks['asset2']['ret']:.2f}%")
-        m2.metric("Std. Dev.",    f"{benchmarks['asset2']['sd']:.2f}%")
-        m3.metric("Sharpe Ratio", f"{benchmarks['asset2']['sharpe']:.3f}")
-
-    with col3:
-        st.markdown("**Equal Weight (50/50)**")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Exp. Return",  f"{benchmarks['equal']['ret']:.2f}%")
-        m2.metric("Std. Dev.",    f"{benchmarks['equal']['sd']:.2f}%")
-        m3.metric("Sharpe Ratio", f"{benchmarks['equal']['sharpe']:.3f}")
+    st.markdown(
+        f"""<div style="display:flex;gap:16px;margin-bottom:8px;">
+            {benchmark_card("100% Asset 1",
+                benchmarks['asset1']['ret'],
+                benchmarks['asset1']['sd'],
+                benchmarks['asset1']['sharpe'],
+                border_color="#1F4E79")}
+            {benchmark_card("100% Asset 2",
+                benchmarks['asset2']['ret'],
+                benchmarks['asset2']['sd'],
+                benchmarks['asset2']['sharpe'],
+                border_color="#E8A020")}
+            {benchmark_card("Equal Weight (50/50)",
+                benchmarks['equal']['ret'],
+                benchmarks['equal']['sd'],
+                benchmarks['equal']['sharpe'],
+                border_color="#1E6B3A")}
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
@@ -464,23 +498,46 @@ with tab1:
     )
 
     if eff_summary:
-        e1, e2, e3, e4, e5 = st.columns(5)
-        e1.metric("Asset 1 Weight Range",
-                  f"{eff_summary['w_A1_range'][0]*100:.0f}% → "
-                  f"{eff_summary['w_A1_range'][1]*100:.0f}%")
-        e2.metric("Asset 2 Weight Range",
-                  f"{eff_summary['w_A2_range'][0]*100:.0f}% → "
-                  f"{eff_summary['w_A2_range'][1]*100:.0f}%")
-        e3.metric("Std. Dev. Range",
-                  f"{eff_summary['sd_range'][0]:.2f}% → "
-                  f"{eff_summary['sd_range'][1]:.2f}%")
-        e4.metric("Exp. Return Range",
-                  f"{eff_summary['ret_range'][0]:.2f}% → "
-                  f"{eff_summary['ret_range'][1]:.2f}%")
-        e5.metric("Peak Sharpe Ratio",
-                  f"{eff_summary['peak_sharpe']:.3f}",
-                  help=(f"At Asset 1 Weight = {eff_summary['peak_w_A1']*100:.0f}%, "
-                        f"Asset 2 Weight = {eff_summary['peak_w_A2']*100:.0f}%"))
+        # Row 1: weight ranges + peak sharpe (3 columns — less crowded)
+        e1, e2, e3 = st.columns(3)
+        e1.metric(
+            "Asset 1 Weight Range",
+            f"{eff_summary['w_A1_range'][0]*100:.0f}%",
+            f"→ {eff_summary['w_A1_range'][1]*100:.0f}%",
+            help="From MVP down to 100% Asset 2",
+        )
+        e2.metric(
+            "Asset 2 Weight Range",
+            f"{eff_summary['w_A2_range'][0]*100:.0f}%",
+            f"→ {eff_summary['w_A2_range'][1]*100:.0f}%",
+            help="From MVP up to 100% Asset 2",
+        )
+        e3.metric(
+            "Peak Sharpe Ratio",
+            f"{eff_summary['peak_sharpe']:.3f}",
+            help=(f"At Asset 1 Weight = {eff_summary['peak_w_A1']*100:.0f}%, "
+                  f"Asset 2 Weight = {eff_summary['peak_w_A2']*100:.0f}%"),
+        )
+
+        # Row 2: std dev range + return range + portfolio count
+        e4, e5, e6 = st.columns(3)
+        e4.metric(
+            "Std. Dev. Range",
+            f"{eff_summary['sd_range'][0]:.2f}%",
+            f"→ {eff_summary['sd_range'][1]:.2f}%",
+            help="From MVP (lowest) to 100% Asset 2 (highest)",
+        )
+        e5.metric(
+            "Exp. Return Range",
+            f"{eff_summary['ret_range'][0]:.2f}%",
+            f"→ {eff_summary['ret_range'][1]:.2f}%",
+            help="From MVP return up to 100% Asset 2 return",
+        )
+        e6.metric(
+            "Portfolios in Region",
+            f"{eff_summary['n_portfolios']}",
+            help="Number of long-only portfolio combinations above the MVP",
+        )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
