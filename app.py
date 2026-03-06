@@ -382,57 +382,47 @@ with tab1:
 
     def benchmark_card(title, ret, sd, sharpe, border_color="#2E75B6"):
         """Render a benchmark portfolio as a compact HTML card."""
-        return f"""
-        <div style="
-            background:#F8FBFF;
-            border:1px solid #BDD7EE;
-            border-top:4px solid {border_color};
-            border-radius:8px;
-            padding:14px 18px;
-            flex:1;
-        ">
-            <div style="font-weight:700;font-size:0.92rem;color:#1F4E79;
-                        margin-bottom:12px;">{title}</div>
-            <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
-                <tr>
-                    <td style="color:#595959;padding:3px 0;">Exp. Return</td>
-                    <td style="text-align:right;font-weight:700;
-                               font-family:monospace;color:#1F4E79;">
-                        {ret:.2f}%</td>
-                </tr>
-                <tr>
-                    <td style="color:#595959;padding:3px 0;">Std. Dev.</td>
-                    <td style="text-align:right;font-weight:700;
-                               font-family:monospace;color:#1F4E79;">
-                        {sd:.2f}%</td>
-                </tr>
-                <tr>
-                    <td style="color:#595959;padding:3px 0;">Sharpe Ratio</td>
-                    <td style="text-align:right;font-weight:700;
-                               font-family:monospace;color:#1F4E79;">
-                        {sharpe:.3f}</td>
-                </tr>
-            </table>
-        </div>"""
+        return (
+            f'<div style="background:#F8FBFF;border:1px solid #BDD7EE;'
+            f'border-top:4px solid {border_color};border-radius:8px;'
+            f'padding:14px 18px;flex:1;">'
+            f'<div style="font-weight:700;font-size:0.92rem;color:#1F4E79;'
+            f'margin-bottom:12px;">{title}</div>'
+            f'<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">'
+            f'<tr>'
+            f'<td style="color:#595959;padding:3px 0;">Exp. Return</td>'
+            f'<td style="text-align:right;font-weight:700;font-family:monospace;color:#1F4E79;">{ret:.2f}%</td>'
+            f'</tr>'
+            f'<tr>'
+            f'<td style="color:#595959;padding:3px 0;">Std. Dev.</td>'
+            f'<td style="text-align:right;font-weight:700;font-family:monospace;color:#1F4E79;">{sd:.2f}%</td>'
+            f'</tr>'
+            f'<tr>'
+            f'<td style="color:#595959;padding:3px 0;">Sharpe Ratio</td>'
+            f'<td style="text-align:right;font-weight:700;font-family:monospace;color:#1F4E79;">{sharpe:.3f}</td>'
+            f'</tr>'
+            f'</table>'
+            f'</div>'
+        )
+
+    c1 = benchmark_card("100% Asset 1",
+                        benchmarks['asset1']['ret'],
+                        benchmarks['asset1']['sd'],
+                        benchmarks['asset1']['sharpe'],
+                        border_color="#1F4E79")
+    c2 = benchmark_card("100% Asset 2",
+                        benchmarks['asset2']['ret'],
+                        benchmarks['asset2']['sd'],
+                        benchmarks['asset2']['sharpe'],
+                        border_color="#E8A020")
+    c3 = benchmark_card("Equal Weight (50/50)",
+                        benchmarks['equal']['ret'],
+                        benchmarks['equal']['sd'],
+                        benchmarks['equal']['sharpe'],
+                        border_color="#1E6B3A")
 
     st.markdown(
-        f"""<div style="display:flex;gap:16px;margin-bottom:8px;">
-            {benchmark_card("100% Asset 1",
-                benchmarks['asset1']['ret'],
-                benchmarks['asset1']['sd'],
-                benchmarks['asset1']['sharpe'],
-                border_color="#1F4E79")}
-            {benchmark_card("100% Asset 2",
-                benchmarks['asset2']['ret'],
-                benchmarks['asset2']['sd'],
-                benchmarks['asset2']['sharpe'],
-                border_color="#E8A020")}
-            {benchmark_card("Equal Weight (50/50)",
-                benchmarks['equal']['ret'],
-                benchmarks['equal']['sd'],
-                benchmarks['equal']['sharpe'],
-                border_color="#1E6B3A")}
-        </div>""",
+        f'<div style="display:flex;gap:16px;margin-bottom:8px;">{c1}{c2}{c3}</div>',
         unsafe_allow_html=True,
     )
 
@@ -443,32 +433,20 @@ with tab1:
 
     def opt_card(title, row, extra_note=""):
         """Render a styled optimal portfolio card."""
-        st.markdown(f"""
-        <div class='opt-card'>
-            <div class='opt-card-title'>{title}</div>
-            <div class='opt-card-row'>
-                <span>Asset 1 Weight</span>
-                <span class='opt-card-value'>{row['w_A1']*100:.1f}%</span>
-            </div>
-            <div class='opt-card-row'>
-                <span>Asset 2 Weight</span>
-                <span class='opt-card-value'>{row['w_A2']*100:.1f}%</span>
-            </div>
-            <div class='opt-card-row'>
-                <span>Exp. Return</span>
-                <span class='opt-card-value'>{row['ret']:.2f}%</span>
-            </div>
-            <div class='opt-card-row'>
-                <span>Std. Dev.</span>
-                <span class='opt-card-value'>{row['sd']:.2f}%</span>
-            </div>
-            <div class='opt-card-row'>
-                <span>Sharpe Ratio</span>
-                <span class='opt-card-value'>{row['sharpe']:.3f}</span>
-            </div>
-            {"<div style='margin-top:6px;font-size:0.78rem;color:#595959'>" + extra_note + "</div>" if extra_note else ""}
-        </div>
-        """, unsafe_allow_html=True)
+        note_html = (f"<div style='margin-top:6px;font-size:0.78rem;color:#595959'>{extra_note}</div>"
+                     if extra_note else "")
+        html = (
+            f"<div class='opt-card'>"
+            f"<div class='opt-card-title'>{title}</div>"
+            f"<div class='opt-card-row'><span>Asset 1 Weight</span><span class='opt-card-value'>{row['w_A1']*100:.1f}%</span></div>"
+            f"<div class='opt-card-row'><span>Asset 2 Weight</span><span class='opt-card-value'>{row['w_A2']*100:.1f}%</span></div>"
+            f"<div class='opt-card-row'><span>Exp. Return</span><span class='opt-card-value'>{row['ret']:.2f}%</span></div>"
+            f"<div class='opt-card-row'><span>Std. Dev.</span><span class='opt-card-value'>{row['sd']:.2f}%</span></div>"
+            f"<div class='opt-card-row'><span>Sharpe Ratio</span><span class='opt-card-value'>{row['sharpe']:.3f}</span></div>"
+            f"{note_html}"
+            f"</div>"
+        )
+        st.markdown(html, unsafe_allow_html=True)
 
     n_cards = 4 if allow_short else 3
     card_cols = st.columns(n_cards)
