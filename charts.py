@@ -542,7 +542,7 @@ def _add_cal_key_markers(fig, cal_df, r_risky, sd_risky, rf):
     df_short = cal_df[cal_df["w_risky"].between(-1.02, -0.98)]
     if not df_short.empty:
         points.append(
-            (sd_risky, -r_risky + 2*rf, sd_risky, "-100% Risky Asset (Short-Selling)", COLORS["purple"] if "purple" in COLORS else "#7B2D8B")
+            (sd_risky, -r_risky + 2*rf, sd_risky, "200% Risk Free, -100% Risky (Short-Selling)", COLORS["purple"] if "purple" in COLORS else "#7B2D8B")
         )
         # Compute properly from cal_df row
         row = df_short.iloc[0]
