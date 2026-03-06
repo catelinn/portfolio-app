@@ -341,21 +341,25 @@ def find_max_return(frontier_df, long_only=True):
     return frontier_df.loc[idx]
 
 
-def efficient_frontier_region(frontier_df):
+def efficient_frontier_region(frontier_df, allow_short=False):
     """
     Extract the efficient frontier region:
-    long-only portfolios at or above MVP return.
+    portfolios at or above MVP return.
+    When allow_short=False, restricts to long-only rows (weight_region == 'long_only').
+    When allow_short=True, includes all weight regions.
 
     Parameters
     ----------
     frontier_df : pd.DataFrame  output of build_frontier()
+    allow_short : bool          whether short-selling is enabled
 
     Returns
     -------
-    pd.DataFrame  — subset where region == 'efficient'
+    pd.DataFrame  — filtered subset where region == 'efficient'
     dict          — summary stats for the region
     """
-    eff_df = frontier_df[frontier_df["region"] == "efficient"].copy()
+    df = frontier_df if allow_short else frontier_df[frontier_df["weight_region"] == "long_only"]
+    eff_df = df[df["region"] == "efficient"].copy()
 
     if eff_df.empty:
         return eff_df, {}

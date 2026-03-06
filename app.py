@@ -256,7 +256,7 @@ def compute_frontier():
         max_sr        = find_max_sharpe(df, long_only=True),
         max_ret_lo    = find_max_return(df, long_only=True),
         max_ret_lev   = find_max_return(df, long_only=False),
-        eff_summary   = efficient_frontier_region(df)[1],
+        eff_summary   = efficient_frontier_region(df, allow_short=allow_short)[1],
         benchmarks    = benchmark_stats(r1, sd1, r2, sd2, rho, rf),
         f_summary_tbl = frontier_summary_table(df, r1, sd1, r2, sd2, rho, rf, allow_short=short),
         f_r1=r1, f_sd1=sd1, f_r2=r2, f_sd2=sd2, f_rho=rho, f_rf=rf,
