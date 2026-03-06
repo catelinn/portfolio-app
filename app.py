@@ -146,33 +146,20 @@ st.markdown("""
         color: #1F4E79;
         margin-bottom: 1rem;
     }
-    /* Styled parameter expander headers */
-    details[data-testid="stExpander"] > summary {
+
+    /* Parameter banner above expanders */
+    .param-banner {
         background-color: #1F4E79;
-        color: white !important;
-        border-radius: 6px;
-        padding: 10px 16px;
+        color: white;
         font-weight: 600;
-        font-size: 0.9rem;
-    }
-    details[data-testid="stExpander"] > summary:hover {
-        background-color: #16375A;
-    }
-    details[data-testid="stExpander"] > summary svg {
-        fill: white !important;
-        stroke: white !important;
-    }
-    details[data-testid="stExpander"][open] > summary {
+        font-size: 0.88rem;
+        padding: 8px 14px;
         border-radius: 6px 6px 0 0;
-    }
-    details[data-testid="stExpander"] > div {
-        border: 1px solid #1F4E79;
-        border-top: none;
-        border-radius: 0 0 6px 6px;
-        padding: 12px;
+        margin-bottom: -1px;
+        letter-spacing: 0.3px;
     }
 
-</style>
+
 """, unsafe_allow_html=True)
 
 
@@ -336,6 +323,7 @@ tab1, tab2, tab3 = st.tabs([
 with tab1:
 
     # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
+    st.markdown("<div class='param-banner'>⚙️ Parameters — Portfolio Frontier &nbsp;·&nbsp; shared with Correlation Effect</div>", unsafe_allow_html=True)
     with st.expander("⚙️ Parameters — Portfolio Frontier  (shared with Correlation Effect)", expanded=False):
         pc1, pc2, pc3 = st.columns(3)
         with pc1:
@@ -617,6 +605,7 @@ with tab1:
 with tab2:
 
     # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
+    st.markdown("<div class='param-banner'>⚙️ Parameters — Correlation Effect &nbsp;·&nbsp; shared with Portfolio Frontier</div>", unsafe_allow_html=True)
     with st.expander("⚙️ Parameters — Correlation Effect  (shared with Portfolio Frontier)", expanded=False):
         rc1, rc2, rc3 = st.columns(3)
         with rc1:
@@ -701,6 +690,7 @@ with tab2:
 with tab3:
 
     # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
+    st.markdown("<div class='param-banner'>⚙️ Parameters — Capital Allocation Line</div>", unsafe_allow_html=True)
     with st.expander("⚙️ Parameters — Capital Allocation Line", expanded=False):
         cc1, cc2 = st.columns(2)
         with cc1:
