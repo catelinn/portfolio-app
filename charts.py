@@ -82,8 +82,9 @@ def _base_layout(title, xaxis_title, yaxis_title, subtitle=""):
             font=dict(size=11), bgcolor="rgba(255,255,255,0.85)",
             bordercolor="#CCCCCC", borderwidth=1,
             x=1.01, y=1, xanchor="left",
+            yanchor="top",
         ),
-        margin=dict(t=80, b=60, l=70, r=20),
+        margin=dict(t=80, b=60, l=70, r=160),
         hovermode="closest",
     )
 
@@ -232,9 +233,9 @@ def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
     fig = go.Figure()
 
     weight_region_styles = [
-        ("long_only", "Long Only",                   COLORS["efficient"], "solid", 2.5),
+        ("long_only", "Long Only",                    COLORS["efficient"], "solid", 2.5),
         ("short_A1",  "Short Asset 1 / Long Asset 2", COLORS["short_A1"],  "solid", 2.5),
-        ("long_A1",   "Long Asset 1 / Short Asset 2", COLORS["long_A1"],   "dash",  2.5),
+        ("long_A1",   "Long Asset 1 / Short Asset 2", COLORS["long_A1"],   "solid", 2.5),
     ]
 
     for wr, label, color, dash, width in weight_region_styles:
@@ -351,7 +352,7 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
         ))
 
     fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
-    fig = _add_extreme_markers(fig, frontier_df, r1, sd1, r2, sd2)
+    fig = _add_extreme_markers(fig, df, r1, sd1, r2, sd2)
 
     # Dynamic annotation — only show if this region is actually dominated
     if r2 < r1:
@@ -404,7 +405,7 @@ def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
         ))
 
     fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
-    fig = _add_extreme_markers(fig, frontier_df, r1, sd1, r2, sd2)
+    fig = _add_extreme_markers(fig, df, r1, sd1, r2, sd2)
 
     # Dynamic annotation — only show if this region is actually dominated
     if r1 < r2:
