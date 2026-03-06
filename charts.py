@@ -227,25 +227,27 @@ def _add_extreme_markers(fig, frontier_df, r1, sd1, r2, sd2):
 def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
     """
     Chart 1 — All Allocations (full frontier, requires short-selling ON).
-    Shows efficient + dominated across the full hyperbola (w=-100% to w=+200%).
+    Shows 3 colored segments by weight region: long_only, short_A1, long_A1.
     """
     fig = go.Figure()
 
-    for region in ["efficient", "dominated"]:
-        df_r = frontier_df[frontier_df["region"] == region].sort_values("w_A1", ascending=False)
+    weight_region_styles = [
+        ("long_only", "Long Only",                   COLORS["efficient"], "solid", 2.5),
+        ("short_A1",  "Short Asset 1 / Long Asset 2", COLORS["short_A1"],  "solid", 2.5),
+        ("long_A1",   "Long Asset 1 / Short Asset 2", COLORS["long_A1"],   "dash",  2.5),
+    ]
+
+    for wr, label, color, dash, width in weight_region_styles:
+        df_r = frontier_df[frontier_df["weight_region"] == wr].sort_values("w_A1")
         if df_r.empty:
             continue
         fig.add_trace(go.Scatter(
             x=df_r["sd"], y=df_r["ret"],
             mode="lines",
-            name=REGION_LABELS[region],
-            line=dict(
-                color=COLORS[region],
-                width=3 if region == "efficient" else 2,
-                dash="solid" if region == "efficient" else "dash",
-            ),
+            name=label,
+            line=dict(color=color, width=width, dash=dash),
             customdata=list(zip(
-                [REGION_LABELS[region]] * len(df_r),
+                [label] * len(df_r),
                 df_r["w_A1"] * 100,
                 df_r["w_A2"] * 100,
                 df_r["sharpe"],

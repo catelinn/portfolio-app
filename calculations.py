@@ -148,18 +148,28 @@ def build_frontier(r1, sd1, r2, sd2, rho, rf,
     mvp_ret = df.loc[mvp_idx, "ret"]
 
     # Assign region
+    # efficient/dominated applies to ALL weights based on return vs MVP return.
+    # short_A1 / long_A1 are sub-labels within the dominated/efficient split,
+    # used only by Chart 1 to color the three weight segments distinctly.
     def assign_region(row):
-        w = row["w_A1"]
-        if w < 0:
-            return "short_A1"
-        elif w > 1:
-            return "long_A1"
-        elif row["ret"] >= mvp_ret:
+        if row["ret"] >= mvp_ret:
             return "efficient"
         else:
             return "dominated"
 
     df["region"] = df.apply(assign_region, axis=1)
+
+    # Separate weight-range column for Chart 1 coloring
+    def assign_weight_region(row):
+        w = row["w_A1"]
+        if w < 0:
+            return "short_A1"
+        elif w > 1:
+            return "long_A1"
+        else:
+            return "long_only"
+
+    df["weight_region"] = df.apply(assign_weight_region, axis=1)
     return df
 
 
