@@ -494,8 +494,8 @@ with tab1:
         w_a2_dir   = "increases" if w_a2_end > w_a2_start else "decreases"
         sd_dir     = "increases" if sd_end > sd_start else "decreases"
         ret_dir    = "increases" if ret_end > ret_start else "decreases"
-        high_ret   = "Asset 1" if f_r1 >= f_r2 else "Asset 2"
-        low_ret    = "Asset 2" if f_r1 >= f_r2 else "Asset 1"
+        # Endpoint label: describe the actual end weights, e.g. "200% A1 / -100% A2"
+        endpoint   = f"{w_a1_end:.0f}% A1 / {w_a2_end:.0f}% A2"
 
         # Row 1: weight ranges + peak sharpe
         e1, e2, e3 = st.columns(3)
@@ -504,14 +504,14 @@ with tab1:
             f"{w_a1_start:.0f}%",
             f"→ {w_a1_end:.0f}%",
             help=(f"Asset 1 weight at MVP = {w_a1_start:.0f}%, "
-                  f"{w_a1_dir} to {w_a1_end:.0f}% at 100% {high_ret}"),
+                  f"{w_a1_dir} to {w_a1_end:.0f}% at the high-return endpoint ({endpoint})"),
         )
         e2.metric(
             "Asset 2 Weight Range",
             f"{w_a2_start:.0f}%",
             f"→ {w_a2_end:.0f}%",
             help=(f"Asset 2 weight at MVP = {w_a2_start:.0f}%, "
-                  f"{w_a2_dir} to {w_a2_end:.0f}% at 100% {high_ret}"),
+                  f"{w_a2_dir} to {w_a2_end:.0f}% at the high-return endpoint ({endpoint})"),
         )
         e3.metric(
             "Peak Sharpe Ratio",
@@ -527,20 +527,20 @@ with tab1:
             f"{sd_start:.2f}%",
             f"→ {sd_end:.2f}%",
             help=(f"Std. Dev. starts at {sd_start:.2f}% (MVP) and "
-                  f"{sd_dir} to {sd_end:.2f}% at 100% {high_ret}"),
+                  f"{sd_dir} to {sd_end:.2f}% at the high-return endpoint ({endpoint})"),
         )
         e5.metric(
             "Exp. Return Range",
             f"{ret_start:.2f}%",
             f"→ {ret_end:.2f}%",
             help=(f"Exp. Return starts at {ret_start:.2f}% (MVP) and "
-                  f"{ret_dir} to {ret_end:.2f}% at 100% {high_ret}"),
+                  f"{ret_dir} to {ret_end:.2f}% at the high-return endpoint ({endpoint})"),
         )
         e6.metric(
             "Portfolios in Region",
             f"{eff_summary['n_portfolios']}",
-            help=(f"Number of long-only portfolios with Exp. Return ≥ MVP "
-                  f"({ret_start:.2f}%) — from {w_a1_start:.0f}% to {w_a1_end:.0f}% Asset 1 weight"),
+            help=(f"Number of portfolios with Exp. Return ≥ MVP return ({ret_start:.2f}%) — "
+                  f"Asset 1 weight from {w_a1_start:.0f}% (MVP) to {w_a1_end:.0f}% ({endpoint})"),
         )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
