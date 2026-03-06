@@ -314,7 +314,7 @@ def find_max_return(frontier_df, long_only=True):
     return frontier_df.loc[idx]
 
 
-def efficient_frontier_region(frontier_df):
+def efficient_frontier_region(frontier_df, allow_short=False):
     """
     Extract the efficient frontier region:
     long-only portfolios at or above MVP return.
@@ -322,6 +322,7 @@ def efficient_frontier_region(frontier_df):
     Parameters
     ----------
     frontier_df : pd.DataFrame  output of build_frontier()
+    allow_short : bool          if False, filter to weight_region == 'long_only'
 
     Returns
     -------
@@ -330,10 +331,15 @@ def efficient_frontier_region(frontier_df):
     """
     eff_df = frontier_df[frontier_df["region"] == "efficient"].copy()
 
+    if not allow_short:
+        eff_df = eff_df[eff_df["weight_region"] == "long_only"]
+
     if eff_df.empty:
         return eff_df, {}
 
     peak_sr_row = eff_df.loc[eff_df["sharpe"].idxmax()]
+    mvp_row     = eff_df.loc[eff_df["ret"].idxmin()]
+    hi_ret_row  = eff_df.loc[eff_df["ret"].idxmax()]
 
     summary = {
         "w_A1_range":   (eff_df["w_A1"].max(), eff_df["w_A1"].min()),
@@ -344,6 +350,8 @@ def efficient_frontier_region(frontier_df):
         "peak_w_A1":    peak_sr_row["w_A1"],
         "peak_w_A2":    peak_sr_row["w_A2"],
         "n_portfolios": len(eff_df),
+        "mvp_row":      mvp_row,
+        "hi_ret_row":   hi_ret_row,
     }
 
     return eff_df, summary
