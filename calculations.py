@@ -147,14 +147,10 @@ def build_frontier(r1, sd1, r2, sd2, rho, rf,
     mvp_idx = df["sd"].idxmin()
     mvp_ret = df.loc[mvp_idx, "ret"]
 
-    # Assign region
+    # Assign region — efficient/dominated based on return vs MVP, for ALL weights.
+    # weight_region handles the short_A1/long_only/long_A1 distinction separately.
     def assign_region(row):
-        w = row["w_A1"]
-        if w < 0:
-            return "short_A1"
-        elif w > 1:
-            return "long_A1"
-        elif row["ret"] >= mvp_ret:
+        if row["ret"] >= mvp_ret:
             return "efficient"
         else:
             return "dominated"
