@@ -172,11 +172,12 @@ def _add_mvp_marker(fig, mvp):
     return fig
 
 
-def _add_key_portfolio_markers(fig, max_sr, max_ret_lo, max_ret_lev, allow_short):
-    """Add Max Sharpe, Max Return (Long Only), and Max Return (Leveraged) markers."""
+def _add_key_portfolio_markers(fig, df, max_sr, max_ret_lo, max_ret_lev, allow_short):
+    """Add Max Sharpe, Max Return (Long Only), and Max Return (Leveraged) markers.
+    Only plots a marker if its w_A1 exists in the filtered df (±0.02 tolerance)."""
     markers = [
-        (max_sr,      "⭐ Max Sharpe",           COLORS["blue"],   "star-diamond", "top right"),
-        (max_ret_lo,  "⭐ Max Return (Long Only)", COLORS["green"],  "star-triangle-up", "top right"),
+        (max_sr,      "⭐ Max Sharpe",            COLORS["blue"],  "star-diamond",     "top right"),
+        (max_ret_lo,  "⭐ Max Return (Long Only)", COLORS["green"], "star-triangle-up", "top right"),
     ]
     if allow_short and max_ret_lev is not None:
         markers.append(
@@ -184,6 +185,9 @@ def _add_key_portfolio_markers(fig, max_sr, max_ret_lo, max_ret_lev, allow_short
         )
     for port, label, color, symbol, tpos in markers:
         if port is None:
+            continue
+        w = port["w_A1"]
+        if df[df["w_A1"].between(w - 0.02, w + 0.02)].empty:
             continue
         fig.add_trace(go.Scatter(
             x=[port["sd"]], y=[port["ret"]], mode="markers+text",
@@ -292,7 +296,7 @@ def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp, max_sr, max_ret_lo, m
         ))
 
     fig = _add_mvp_marker(fig, mvp)
-    fig = _add_key_portfolio_markers(fig, max_sr, max_ret_lo, max_ret_lev, allow_short)
+    fig = _add_key_portfolio_markers(fig, frontier_df, max_sr, max_ret_lo, max_ret_lev, allow_short)
     fig = _add_asset_markers(fig, frontier_df)
     fig = _add_extreme_markers(fig, frontier_df)
 
@@ -337,7 +341,7 @@ def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp, max_sr, max_ret
         ))
 
     fig = _add_mvp_marker(fig, mvp)
-    fig = _add_key_portfolio_markers(fig, max_sr, max_ret_lo, max_ret_lev, allow_short)
+    fig = _add_key_portfolio_markers(fig, df, max_sr, max_ret_lo, max_ret_lev, allow_short)
     fig = _add_asset_markers(fig, df)
 
     # Vertical reference line through MVP
@@ -405,7 +409,7 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2, max_sr, max_ret_lo, m
             hovertemplate=_hover_frontier(),
         ))
 
-    fig = _add_key_portfolio_markers(fig, max_sr, max_ret_lo, max_ret_lev, allow_short)
+    fig = _add_key_portfolio_markers(fig, df, max_sr, max_ret_lo, max_ret_lev, allow_short)
     fig = _add_asset_markers(fig, df)
     fig = _add_extreme_markers(fig, df)
 
@@ -464,7 +468,7 @@ def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2, max_sr, max_ret_lo, ma
             hovertemplate=_hover_frontier(),
         ))
 
-    fig = _add_key_portfolio_markers(fig, max_sr, max_ret_lo, max_ret_lev, allow_short)
+    fig = _add_key_portfolio_markers(fig, df, max_sr, max_ret_lo, max_ret_lev, allow_short)
     fig = _add_asset_markers(fig, df)
     fig = _add_extreme_markers(fig, df)
 
