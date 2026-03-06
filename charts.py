@@ -117,30 +117,36 @@ def _hover_cal():
     )
 
 
-def _add_asset_markers(fig, r1, sd1, r2, sd2):
-    """Add scatter markers for 100% Asset 1 and 100% Asset 2."""
-    fig.add_trace(go.Scatter(
-        x=[sd1], y=[r1], mode="markers+text",
-        marker=dict(size=10, color=COLORS["navy"],
-                    symbol="diamond", line=dict(width=1, color="white")),
-        text=["100% Asset 1"], textposition="top right",
-        textfont=dict(size=10, color=COLORS["navy"]),
-        name="100% Asset 1",
-        customdata=[[REGION_LABELS.get("efficient",""), 100.0, 0.0, (r1-3)/sd1]],
-        hovertemplate=_hover_frontier(),
-        showlegend=True,
-    ))
-    fig.add_trace(go.Scatter(
-        x=[sd2], y=[r2], mode="markers+text",
-        marker=dict(size=10, color=COLORS["amber"],
-                    symbol="diamond", line=dict(width=1, color="white")),
-        text=["100% Asset 2"], textposition="top right",
-        textfont=dict(size=10, color=COLORS["amber"]),
-        name="100% Asset 2",
-        customdata=[[REGION_LABELS.get("efficient",""), 0.0, 100.0, (r2-3)/sd2]],
-        hovertemplate=_hover_frontier(),
-        showlegend=True,
-    ))
+def _add_asset_markers(fig, df):
+    """Add scatter markers for 100% Asset 1 and/or 100% Asset 2 if present in df."""
+    df_a1 = df[df["w_A1"].between(0.995, 1.005)]
+    if not df_a1.empty:
+        row = df_a1.iloc[0]
+        fig.add_trace(go.Scatter(
+            x=[row["sd"]], y=[row["ret"]], mode="markers+text",
+            marker=dict(size=10, color=COLORS["navy"],
+                        symbol="diamond", line=dict(width=1, color="white")),
+            text=["100% Asset 1"], textposition="top right",
+            textfont=dict(size=10, color=COLORS["navy"]),
+            name="100% Asset 1",
+            customdata=[[REGION_LABELS.get("efficient",""), 100.0, 0.0, row["sharpe"]]],
+            hovertemplate=_hover_frontier(),
+            showlegend=True,
+        ))
+    df_a2 = df[df["w_A1"].between(-0.005, 0.005)]
+    if not df_a2.empty:
+        row = df_a2.iloc[0]
+        fig.add_trace(go.Scatter(
+            x=[row["sd"]], y=[row["ret"]], mode="markers+text",
+            marker=dict(size=10, color=COLORS["amber"],
+                        symbol="diamond", line=dict(width=1, color="white")),
+            text=["100% Asset 2"], textposition="top right",
+            textfont=dict(size=10, color=COLORS["amber"]),
+            name="100% Asset 2",
+            customdata=[[REGION_LABELS.get("efficient",""), 0.0, 100.0, row["sharpe"]]],
+            hovertemplate=_hover_frontier(),
+            showlegend=True,
+        ))
     return fig
 
 
@@ -186,10 +192,11 @@ def _add_dominated_line(fig, frontier_df):
     return fig
 
 
-def _add_extreme_markers(fig, frontier_df, r1, sd1, r2, sd2):
-    """Add markers for 200% Asset 1 (w_A1=2) and 200% Asset 2 (w_A2=2, w_A1=-1)."""
+def _add_extreme_markers(fig, df):
+    """Add markers for 200% Asset 1 (w_A1=2) and 200% Asset 2 (w_A1=-1)
+    only if those weights exist in the passed df."""
     # 200% Asset 1: w_A1=2, w_A2=-1
-    df_200a1 = frontier_df[frontier_df["w_A1"].between(1.95, 2.05)]
+    df_200a1 = df[df["w_A1"].between(1.95, 2.05)]
     if not df_200a1.empty:
         row = df_200a1.iloc[0]
         fig.add_trace(go.Scatter(
@@ -203,8 +210,8 @@ def _add_extreme_markers(fig, frontier_df, r1, sd1, r2, sd2):
             hovertemplate=_hover_frontier(),
             showlegend=True,
         ))
-    # 200% Asset 2: w_A2=2, w_A1=-1
-    df_200a2 = frontier_df[frontier_df["w_A1"].between(-1.05, -0.95)]
+    # 200% Asset 2: w_A1=-1, w_A2=2
+    df_200a2 = df[df["w_A1"].between(-1.05, -0.95)]
     if not df_200a2.empty:
         row = df_200a2.iloc[0]
         fig.add_trace(go.Scatter(
@@ -257,8 +264,8 @@ def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
         ))
 
     fig = _add_mvp_marker(fig, mvp)
-    fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
-    fig = _add_extreme_markers(fig, frontier_df, r1, sd1, r2, sd2)
+    fig = _add_asset_markers(fig, frontier_df)
+    fig = _add_extreme_markers(fig, frontier_df)
 
     fig.update_layout(_base_layout(
         title="Portfolio Frontier — All Allocations",
@@ -301,7 +308,7 @@ def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
         ))
 
     fig = _add_mvp_marker(fig, mvp)
-    fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
+    fig = _add_asset_markers(fig, df)
 
     # Vertical reference line through MVP
     fig.add_vline(
@@ -364,8 +371,8 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
             hovertemplate=_hover_frontier(),
         ))
 
-    fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
-    fig = _add_extreme_markers(fig, df, r1, sd1, r2, sd2)
+    fig = _add_asset_markers(fig, df)
+    fig = _add_extreme_markers(fig, df)
 
     # Dynamic annotation — only show if dominated rows exist in this weight range
     df_dom_c3 = df[df["region"] == "dominated"]
@@ -418,8 +425,8 @@ def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
             hovertemplate=_hover_frontier(),
         ))
 
-    fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
-    fig = _add_extreme_markers(fig, df, r1, sd1, r2, sd2)
+    fig = _add_asset_markers(fig, df)
+    fig = _add_extreme_markers(fig, df)
 
     # Dynamic annotation — only show if dominated rows exist in this weight range
     df_dom_c4 = df[df["region"] == "dominated"]
@@ -686,7 +693,7 @@ def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2):
             hovertemplate=_hover_frontier(),
         ))
 
-    fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
+    fig = _add_asset_markers(fig, df)
 
     fig.add_annotation(
         text="Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)",
