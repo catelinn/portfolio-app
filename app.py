@@ -642,8 +642,6 @@ with tab2:
             "<div class='info-box'>"
             "ℹ️ <b>Short-selling disabled.</b> "
             "CAL shown for long positions only (Risky Asset Weight ≥ 0%). "
-            "The 'All Allocations' chart — which includes Risky Asset Weight &lt; 0% "
-            "(shorting the risky asset to put more than 100% into T-Bills) — is hidden."
             "</div>",
             unsafe_allow_html=True,
         )
