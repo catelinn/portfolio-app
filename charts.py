@@ -531,13 +531,38 @@ def _cal_traces(cal_df, regions, rf):
     return traces
 
 
-def _add_cal_key_markers(fig, r_risky, sd_risky, rf):
-    """Add markers for 100% RF, 100% Risky, and w=2 leverage points."""
+def _add_cal_key_markers(fig, cal_df, r_risky, sd_risky, rf):
+    """Add markers for 100% RF, 100% Risky, w=2 leverage, and -100% short if it exists in cal_df."""
     points = [
-        (0.0,  rf,                   0.0,        "100% Risk-Free",          COLORS["green"]),
-        (sd_risky, r_risky,          sd_risky,   "100% Risky Asset",        COLORS["navy"]),
-        (2*sd_risky, 2*r_risky-rf,   2*sd_risky, "200% Risky Asset (Leverage)", COLORS["red"]),
+        (0.0,          rf,                 0.0,        "100% Risk-Free",               COLORS["green"]),
+        (sd_risky,     r_risky,            sd_risky,   "100% Risky Asset",             COLORS["navy"]),
+        (2*sd_risky,   2*r_risky-rf,       2*sd_risky, "200% Risky Asset (Leverage)",  COLORS["red"]),
     ]
+    # Add -100% Risky Asset (Short-Selling) only if w=-1 exists in cal_df
+    df_short = cal_df[cal_df["w_risky"].between(-1.02, -0.98)]
+    if not df_short.empty:
+        points.append(
+            (sd_risky, -r_risky + 2*rf, sd_risky, "-100% Risky Asset (Short-Selling)", COLORS["purple"] if "purple" in COLORS else "#7B2D8B")
+        )
+        # Compute properly from cal_df row
+        row = df_short.iloc[0]
+        w, w_rf = -1.0, 2.0
+        sharpe = (r_risky - rf) / sd_risky if sd_risky > 0 else 0
+        fig.add_trace(go.Scatter(
+            x=[row["sd"]], y=[row["ret"]],
+            mode="markers+text",
+            marker=dict(size=10, color="#7B2D8B", symbol="circle",
+                        line=dict(width=1, color="white")),
+            text=["-100% Risky Asset (Short-Selling)"], textposition="top right",
+            textfont=dict(size=10, color="#7B2D8B"),
+            name="-100% Risky Asset (Short-Selling)",
+            customdata=[["-100% Risky Asset (Short-Selling)", w*100, w_rf*100, sharpe]],
+            hovertemplate=_hover_cal(),
+            showlegend=True,
+        ))
+        # Remove from points list to avoid double-plotting
+        points = points[:-1]
+
     for sd_val, ret_val, _, label, color in points:
         w       = sd_val / sd_risky if sd_risky > 0 else 0
         w_rf    = 1 - w
@@ -566,7 +591,7 @@ def chart_cal_all(cal_df, r_risky, sd_risky, rf):
     for trace in _cal_traces(cal_df, ["short", "long_no_lev", "long_lev"], rf):
         fig.add_trace(trace)
 
-    fig = _add_cal_key_markers(fig, r_risky, sd_risky, rf)
+    fig = _add_cal_key_markers(fig, cal_df, r_risky, sd_risky, rf)
     fig.add_hline(y=rf, line_dash="dot", line_color=COLORS["gray"],
                   line_width=1, opacity=0.5,
                   annotation_text=f"rf = {rf}%",
@@ -593,7 +618,7 @@ def chart_cal_all_long(cal_df, r_risky, sd_risky, rf):
     for trace in _cal_traces(df_filtered, ["long_no_lev", "long_lev"], rf):
         fig.add_trace(trace)
 
-    fig = _add_cal_key_markers(fig, r_risky, sd_risky, rf)
+    fig = _add_cal_key_markers(fig, df_filtered, r_risky, sd_risky, rf)
     fig.add_hline(y=rf, line_dash="dot", line_color=COLORS["gray"],
                   line_width=1, opacity=0.5,
                   annotation_text=f"rf = {rf}%",
