@@ -662,13 +662,15 @@ with tab2:
     # ── METRICS ──────────────────────────────────────────────────────────────
     st.markdown("#### CAL Metrics")
 
-    # Row 1 — Sharpe, risk-free rate, CAL equation
-    m1, m2, m3 = st.columns(3)
+    # Row 1 — Sharpe, risk-free rate
+    m1, m2 = st.columns(2)
     m1.metric("Sharpe Ratio", f"{cal_sharpe:.3f}",
               help="Slope of the CAL — reward per unit of risk taken")
     m2.metric("Risk-Free Rate", f"{c_rf:.2f}%",
               help="Intercept of the CAL — Exp. Return when 100% in T-Bills, σ = 0%")
-    m3.metric("CAL Equation",
+
+    # Row 1b — CAL Equation full width
+    st.metric("CAL Equation",
               f"E[R] = {c_rf:.1f}% + {cal_sharpe:.3f} × σ")
 
     # Row 2 — Key portfolio points on the CAL
