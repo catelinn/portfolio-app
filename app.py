@@ -683,10 +683,10 @@ with tab2:
     p2.metric("w = 1  (100% Risky)",
               f"{c_r_risky:.2f}%",
               f"σ = {c_sd_risky:.2f}%")
-    p3.metric("w = 1.5  (50% Leverage)",
+    p3.metric("w = 1.5  (150% Risky, 50% Borrowed)",
               f"{1.5*c_r_risky - 0.5*c_rf:.2f}%",
               f"σ = {1.5*c_sd_risky:.2f}%")
-    p4.metric("w = 2  (100% Leverage)",
+    p4.metric("w = 2  (200% Risky, 100% Borrowed)",
               f"{2*c_r_risky - c_rf:.2f}%",
               f"σ = {2*c_sd_risky:.2f}%",
               help="Borrow 100% at rf to double risky exposure")
