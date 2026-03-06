@@ -312,6 +312,19 @@ def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
         annotation_font=dict(size=10, color=COLORS["gray"]),
     )
 
+    # Show dominated annotation if dominated region exists in long-only
+    df_dom = frontier_df[frontier_df["weight_region"] == "long_only"]
+    df_dom = df_dom[df_dom["region"] == "dominated"]
+    if not df_dom.empty:
+        fig.add_annotation(
+            text="⚠ Dominated region — same risk as portfolios<br>above MVP but lower return",
+            xref="paper", yref="paper", x=0.5, y=0.05,
+            showarrow=False,
+            font=dict(size=11, color=COLORS["red"]),
+            bgcolor="rgba(255,200,200,0.3)",
+            bordercolor=COLORS["red"], borderwidth=1,
+        )
+
     fig.update_layout(_base_layout(
         title="Long Only",
         xaxis_title="Portfolio Std. Dev. (%)",
@@ -354,8 +367,9 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
     fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
     fig = _add_extreme_markers(fig, df, r1, sd1, r2, sd2)
 
-    # Dynamic annotation — only show if this region is actually dominated
-    if r2 < r1:
+    # Dynamic annotation — only show if dominated rows exist in this weight range
+    df_dom_c3 = df[df["region"] == "dominated"]
+    if not df_dom_c3.empty:
         fig.add_annotation(
             text="⚠ Dominated region — same risk as portfolios<br>above MVP but lower return",
             xref="paper", yref="paper", x=0.5, y=0.05,
@@ -407,8 +421,9 @@ def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
     fig = _add_asset_markers(fig, r1, sd1, r2, sd2)
     fig = _add_extreme_markers(fig, df, r1, sd1, r2, sd2)
 
-    # Dynamic annotation — only show if this region is actually dominated
-    if r1 < r2:
+    # Dynamic annotation — only show if dominated rows exist in this weight range
+    df_dom_c4 = df[df["region"] == "dominated"]
+    if not df_dom_c4.empty:
         fig.add_annotation(
             text="⚠ Dominated region — same risk as portfolios<br>above MVP but lower return",
             xref="paper", yref="paper", x=0.5, y=0.05,
