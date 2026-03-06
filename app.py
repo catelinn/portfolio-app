@@ -182,14 +182,15 @@ def apply_preset(preset):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SIDEBAR
+# SIDEBAR — minimal, just short-selling toggle
 # ══════════════════════════════════════════════════════════════════════════════
 
 with st.sidebar:
-
     st.markdown("## ⚙️ Controls")
+    st.caption("Parameters are in each tab — adjust them directly there.")
 
-    # ── Short-selling toggle ───────────────────────────────────────────────
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
     allow_short = st.checkbox(
         "☐ Allow Short-Selling",
         value=st.session_state.allow_short,
@@ -198,11 +199,8 @@ with st.sidebar:
     )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── Presets ────────────────────────────────────────────────────────────
     st.markdown("<div class='sidebar-section'>Quick Presets</div>",
                 unsafe_allow_html=True)
-
     preset_cols = st.columns(2)
     with preset_cols[0]:
         if st.button("Default", use_container_width=True):
@@ -219,105 +217,66 @@ with st.sidebar:
             apply_preset({**DEFAULTS, "f_rho": -1.0})
             st.rerun()
 
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+# ── Always read params from session state ─────────────────────────────────────
+# Each tab renders its own sliders inside an expander which write to session_state.
+# These variables are populated after the tab sliders run (Streamlit top-down order),
+# so we initialise them from session_state here as fallback defaults.
+f_r1       = st.session_state.f_r1
+f_sd1      = st.session_state.f_sd1
+f_r2       = st.session_state.f_r2
+f_sd2      = st.session_state.f_sd2
+f_rho      = st.session_state.f_rho
+f_rf       = st.session_state.f_rf
+c_r_risky  = st.session_state.c_r_risky
+c_sd_risky = st.session_state.c_sd_risky
+c_rf       = st.session_state.c_rf
 
-    # ── Portfolio Frontier parameters ──────────────────────────────────────
-    st.markdown("<div class='sidebar-section'>📊 Portfolio Frontier</div>",
-                unsafe_allow_html=True)
 
-    st.markdown("**Asset 1**")
-    f_r1 = st.slider("Exp. Return (%)",
-                     0.0, 25.0, st.session_state.f_r1, 0.5,
-                     key="f_r1")
-    f_sd1 = st.slider("Std. Dev. (%)",
-                      5.0, 60.0, st.session_state.f_sd1, 1.0,
-                      key="f_sd1")
+# ══════════════════════════════════════════════════════════════════════════════
+# COMPUTE HELPERS — called inside each tab after its sliders run
+# ══════════════════════════════════════════════════════════════════════════════
 
-    st.markdown("**Asset 2**")
-    f_r2 = st.slider("Exp. Return (%) ",
-                     0.0, 30.0, st.session_state.f_r2, 0.5,
-                     key="f_r2")
-
-    # ── Validation: Asset 2 sd must be > Asset 1 sd ────────────────────────
-    sd2_min = f_sd1 + 1.0
-    sd2_val = max(st.session_state.f_sd2, sd2_min)
-
-    if st.session_state.f_sd2 < sd2_min:
-        st.info(
-            f"ℹ️ Asset 2 Std. Dev. adjusted to {sd2_val:.0f}% "
-            f"— must exceed Asset 1 Std. Dev. ({f_sd1:.0f}%)."
-        )
-
-    f_sd2 = st.slider(
-        "Std. Dev. (%)  ",
-        min_value=sd2_min,
-        max_value=80.0,
-        value=sd2_val,
-        step=1.0,
-        key="f_sd2",
-        help="Asset 2 must always be riskier than Asset 1.",
+def compute_frontier():
+    """Recompute frontier data from current session state."""
+    r1, sd1 = st.session_state.f_r1, st.session_state.f_sd1
+    r2, sd2 = st.session_state.f_r2, st.session_state.f_sd2
+    rho, rf = st.session_state.f_rho, st.session_state.f_rf
+    short   = st.session_state.allow_short
+    df      = build_frontier(r1, sd1, r2, sd2, rho, rf)
+    return dict(
+        frontier_df   = df,
+        mvp           = find_mvp(df),
+        max_sr        = find_max_sharpe(df, long_only=True),
+        max_ret_lo    = find_max_return(df, long_only=True),
+        max_ret_lev   = find_max_return(df, long_only=False),
+        eff_summary   = efficient_frontier_region(df)[1],
+        benchmarks    = benchmark_stats(r1, sd1, r2, sd2, rho, rf),
+        f_summary_tbl = frontier_summary_table(df, r1, sd1, r2, sd2, rho, rf, allow_short=short),
+        f_r1=r1, f_sd1=sd1, f_r2=r2, f_sd2=sd2, f_rho=rho, f_rf=rf,
     )
 
-    st.markdown("**Correlation & Risk-Free Rate**")
-    f_rho = st.slider("Correlation (ρ)",
-                      -1.0, 1.0, st.session_state.f_rho, 0.1,
-                      key="f_rho")
-    f_rf  = st.slider("Risk-Free Rate (%)",
-                      0.0, 10.0, st.session_state.f_rf, 0.5,
-                      key="f_rf",
-                      help="Used for Sharpe ratio calculation only.")
+def compute_cal():
+    """Recompute CAL data from current session state."""
+    r, sd, rf = st.session_state.c_r_risky, st.session_state.c_sd_risky, st.session_state.c_rf
+    short     = st.session_state.allow_short
+    return dict(
+        cal_df        = build_cal(r, sd, rf),
+        c_summary_tbl = cal_summary_table(r, sd, rf, allow_short=short),
+        cal_eq_str    = cal_equation_str(r, sd, rf),
+        cal_sharpe    = (r - rf) / sd if sd > 0 else 0.0,
+        c_r_risky=r, c_sd_risky=sd, c_rf=rf,
+    )
 
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── CAL parameters ─────────────────────────────────────────────────────
-    st.markdown("<div class='sidebar-section'>📈 Capital Allocation Line</div>",
-                unsafe_allow_html=True)
-
-    st.markdown("**Risky Asset**")
-    c_r_risky  = st.slider("Exp. Return (%)",
-                           0.0, 25.0, st.session_state.c_r_risky, 0.5,
-                           key="c_r_risky")
-    c_sd_risky = st.slider("Std. Dev. (%)",
-                           1.0, 60.0, st.session_state.c_sd_risky, 1.0,
-                           key="c_sd_risky")
-
-    st.markdown("**Risk-Free Asset**")
-    c_rf = st.slider("Risk-Free Rate (%)",
-                     0.0, 10.0, st.session_state.c_rf, 0.5,
-                     key="c_rf",
-                     help="T-Bill rate — zero std. dev. by definition.")
-    st.caption("📌 Risk-free asset: zero std. dev., zero correlation with risky asset.")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# COMPUTE — run all calculations with current params
-# ══════════════════════════════════════════════════════════════════════════════
-
-# Frontier
-frontier_df   = build_frontier(f_r1, f_sd1, f_r2, f_sd2, f_rho, f_rf)
-mvp           = find_mvp(frontier_df)
-max_sr        = find_max_sharpe(frontier_df, long_only=True)
-max_ret_lo    = find_max_return(frontier_df, long_only=True)
-max_ret_lev   = find_max_return(frontier_df, long_only=False)
-eff_df, eff_summary = efficient_frontier_region(frontier_df)
-benchmarks    = benchmark_stats(f_r1, f_sd1, f_r2, f_sd2, f_rho, f_rf)
-f_summary_tbl = frontier_summary_table(
-    frontier_df, f_r1, f_sd1, f_r2, f_sd2, f_rho, f_rf,
-    allow_short=allow_short,
-)
-
-# CAL
-cal_df        = build_cal(c_r_risky, c_sd_risky, c_rf)
-c_summary_tbl = cal_summary_table(c_r_risky, c_sd_risky, c_rf,
-                                   allow_short=allow_short)
-cal_eq_str    = cal_equation_str(c_r_risky, c_sd_risky, c_rf)
-cal_sharpe    = ((c_r_risky - c_rf) / c_sd_risky
-                 if c_sd_risky > 0 else 0.0)
-
-# Correlation
-rho_frontiers = build_rho_frontiers(f_r1, f_sd1, f_r2, f_sd2, f_rf)
-rho_mvp_df    = rho_mvp_table(f_r1, f_sd1, f_r2, f_sd2, f_rf,
-                               current_rho=f_rho)
+def compute_rho():
+    """Recompute correlation data from current session state."""
+    r1, sd1 = st.session_state.f_r1, st.session_state.f_sd1
+    r2, sd2 = st.session_state.f_r2, st.session_state.f_sd2
+    rho, rf = st.session_state.f_rho, st.session_state.f_rf
+    return dict(
+        rho_frontiers = build_rho_frontiers(r1, sd1, r2, sd2, rf),
+        rho_mvp_df    = rho_mvp_table(r1, sd1, r2, sd2, rf, current_rho=rho),
+        f_r1=r1, f_sd1=sd1, f_r2=r2, f_sd2=sd2, f_rho=rho, f_rf=rf,
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -351,6 +310,42 @@ tab1, tab2, tab3 = st.tabs([
 # TAB 1 — PORTFOLIO FRONTIER
 # ────────────────────────────────────────────────────────────────────────────
 with tab1:
+
+    # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
+    with st.expander("⚙️ Parameters — Portfolio Frontier", expanded=False):
+        pc1, pc2, pc3 = st.columns(3)
+        with pc1:
+            st.markdown("**Asset 1**")
+            f_r1  = st.slider("Exp. Return (%)",  0.0, 25.0, st.session_state.f_r1,  0.5, key="f_r1")
+            f_sd1 = st.slider("Std. Dev. (%)",    5.0, 60.0, st.session_state.f_sd1, 1.0, key="f_sd1")
+        with pc2:
+            st.markdown("**Asset 2**")
+            f_r2   = st.slider("Exp. Return (%) ", 0.0, 30.0, st.session_state.f_r2, 0.5, key="f_r2")
+            sd2_min = f_sd1 + 1.0
+            sd2_val = max(st.session_state.f_sd2, sd2_min)
+            if st.session_state.f_sd2 < sd2_min:
+                st.info(f"ℹ️ Asset 2 Std. Dev. adjusted to {sd2_val:.0f}% — must exceed Asset 1 ({f_sd1:.0f}%).")
+            f_sd2  = st.slider("Std. Dev. (%)  ",  sd2_min, 80.0, sd2_val, 1.0, key="f_sd2",
+                               help="Asset 2 must always be riskier than Asset 1.")
+        with pc3:
+            st.markdown("**Correlation & Risk-Free Rate**")
+            f_rho = st.slider("Correlation (ρ)",   -1.0, 1.0,  st.session_state.f_rho, 0.1, key="f_rho")
+            f_rf  = st.slider("Risk-Free Rate (%)", 0.0, 10.0, st.session_state.f_rf,  0.5, key="f_rf",
+                              help="Used for Sharpe ratio calculation only.")
+
+    # ── Compute with latest params ──────────────────────────────────────────
+    _f = compute_frontier()
+    frontier_df   = _f["frontier_df"]
+    mvp           = _f["mvp"]
+    max_sr        = _f["max_sr"]
+    max_ret_lo    = _f["max_ret_lo"]
+    max_ret_lev   = _f["max_ret_lev"]
+    eff_summary   = _f["eff_summary"]
+    benchmarks    = _f["benchmarks"]
+    f_summary_tbl = _f["f_summary_tbl"]
+    f_r1, f_sd1   = _f["f_r1"], _f["f_sd1"]
+    f_r2, f_sd2   = _f["f_r2"], _f["f_sd2"]
+    f_rho, f_rf   = _f["f_rho"], _f["f_rf"]
 
     # ── Short-selling message ────────────────────────────────────────────────
     if not allow_short:
@@ -570,6 +565,43 @@ with tab1:
 # ────────────────────────────────────────────────────────────────────────────
 with tab2:
 
+    # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
+    with st.expander("⚙️ Parameters — Capital Allocation Line", expanded=False):
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            st.markdown("**Risky Asset**")
+            c_r_risky  = st.slider("Exp. Return (%)", 0.0, 25.0, st.session_state.c_r_risky,  0.5, key="c_r_risky")
+            c_sd_risky = st.slider("Std. Dev. (%)",   1.0, 60.0, st.session_state.c_sd_risky, 1.0, key="c_sd_risky")
+        with cc2:
+            st.markdown("**Risk-Free Asset**")
+            c_rf = st.slider("Risk-Free Rate (%)", 0.0, 10.0, st.session_state.c_rf, 0.5, key="c_rf",
+                             help="T-Bill rate — zero std. dev. by definition.")
+            st.caption("📌 Zero std. dev., zero correlation with risky asset.")
+
+    # ── Compute with latest params ──────────────────────────────────────────
+    _f = compute_frontier()
+    frontier_df   = _f["frontier_df"]
+    mvp           = _f["mvp"]
+    max_sr        = _f["max_sr"]
+    max_ret_lo    = _f["max_ret_lo"]
+    max_ret_lev   = _f["max_ret_lev"]
+    eff_summary   = _f["eff_summary"]
+    benchmarks    = _f["benchmarks"]
+    f_summary_tbl = _f["f_summary_tbl"]
+    f_r1, f_sd1   = _f["f_r1"], _f["f_sd1"]
+    f_r2, f_sd2   = _f["f_r2"], _f["f_sd2"]
+    f_rho, f_rf   = _f["f_rho"], _f["f_rf"]
+
+    # ── Compute with latest params ──────────────────────────────────────────
+    _c = compute_cal()
+    cal_df        = _c["cal_df"]
+    c_summary_tbl = _c["c_summary_tbl"]
+    cal_eq_str    = _c["cal_eq_str"]
+    cal_sharpe    = _c["cal_sharpe"]
+    c_r_risky     = _c["c_r_risky"]
+    c_sd_risky    = _c["c_sd_risky"]
+    c_rf          = _c["c_rf"]
+
     # ── Short-selling message ────────────────────────────────────────────────
     if not allow_short:
         st.markdown(
@@ -725,6 +757,30 @@ with tab2:
 # TAB 3 — CORRELATION EFFECT
 # ────────────────────────────────────────────────────────────────────────────
 with tab3:
+
+    # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
+    with st.expander("⚙️ Parameters — Correlation Effect", expanded=False):
+        rc1, rc2, rc3 = st.columns(3)
+        with rc1:
+            st.markdown("**Asset 1**")
+            f_r1  = st.slider("Exp. Return (%)",  0.0, 25.0, st.session_state.f_r1,  0.5, key="rho_f_r1",  on_change=lambda: st.session_state.update(f_r1=st.session_state.rho_f_r1))
+            f_sd1 = st.slider("Std. Dev. (%)",    5.0, 60.0, st.session_state.f_sd1, 1.0, key="rho_f_sd1", on_change=lambda: st.session_state.update(f_sd1=st.session_state.rho_f_sd1))
+        with rc2:
+            st.markdown("**Asset 2**")
+            f_r2  = st.slider("Exp. Return (%) ", 0.0, 30.0, st.session_state.f_r2,  0.5, key="rho_f_r2",  on_change=lambda: st.session_state.update(f_r2=st.session_state.rho_f_r2))
+            f_sd2 = st.slider("Std. Dev. (%)  ",  st.session_state.f_sd1+1, 80.0, st.session_state.f_sd2, 1.0, key="rho_f_sd2", on_change=lambda: st.session_state.update(f_sd2=st.session_state.rho_f_sd2))
+        with rc3:
+            st.markdown("**Correlation & Risk-Free Rate**")
+            f_rho = st.slider("Correlation (ρ)",   -1.0, 1.0,  st.session_state.f_rho, 0.1, key="rho_f_rho", on_change=lambda: st.session_state.update(f_rho=st.session_state.rho_f_rho))
+            f_rf  = st.slider("Risk-Free Rate (%)", 0.0, 10.0, st.session_state.f_rf,  0.5, key="rho_f_rf",  on_change=lambda: st.session_state.update(f_rf=st.session_state.rho_f_rf))
+
+    # ── Compute with latest params ──────────────────────────────────────────
+    _r = compute_rho()
+    rho_frontiers = _r["rho_frontiers"]
+    rho_mvp_df    = _r["rho_mvp_df"]
+    f_r1, f_sd1   = _r["f_r1"], _r["f_sd1"]
+    f_r2, f_sd2   = _r["f_r2"], _r["f_sd2"]
+    f_rho, f_rf   = _r["f_rho"], _r["f_rf"]
 
     st.markdown(
         "<div class='info-box'>"
