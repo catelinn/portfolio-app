@@ -160,6 +160,18 @@ def build_frontier(r1, sd1, r2, sd2, rho, rf,
             return "dominated"
 
     df["region"] = df.apply(assign_region, axis=1)
+
+    # Assign weight_region for filtering in efficient_frontier_region
+    def assign_weight_region(row):
+        w = row["w_A1"]
+        if w < 0:
+            return "short_A1"
+        elif w > 1:
+            return "long_A1"
+        else:
+            return "long_only"
+
+    df["weight_region"] = df.apply(assign_weight_region, axis=1)
     return df
 
 
