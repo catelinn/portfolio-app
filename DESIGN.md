@@ -3,7 +3,7 @@
 
 **Course:** FIN 511 — Investments I: Fundamentals of Performance Evaluation  
 **Module:** 1 — Lesson 1-5: Portfolio Choice in General Settings  
-**Version:** 2.1 | March 2026
+**Version:** 2.4 | March 2026
 
 ---
 
@@ -530,6 +530,9 @@ Items to consider for future versions:
 | 1.9 | March 2026 | Verified and documented that all frontier chart markers and lines are fully data-driven; _add_key_portfolio_markers checks w_A1 against filtered df before plotting; CAL chart hardcoding confirmed intentional |
 | 2.0 | March 2026 | Added chart_region column to build_frontier() for strict marker ownership (boundaries w=0/w=1 belong to chart2 only); _add_key_portfolio_markers uses chart_region lookup instead of magic number ranges; weight_region retained for line coloring and boundary-widened df filtering |
 | 2.1 | March 2026 | Replaced all hardcoded ? tooltip texts in Efficient Frontier Region metrics with dynamic values derived from eff_summary and current parameters — direction words (increases/decreases), actual MVP values, and which asset has the higher return are all computed at runtime |
+| 2.2 | March 2026 | Fixed Efficient Frontier Region tooltip endpoint labels — removed hardcoded "100% Asset 1/2" assumption; all 6 metric tooltips now derive endpoint from actual w_A1_range/w_A2_range end values (e.g. "200% A1 / -100% A2" when short-selling is on) |
+| 2.3 | March 2026 | Replaced eff_summary tuple-based tooltip helpers with direct frontier_df row lookups — mvp row for start point, max_ret_lev (short-selling on) or max_ret_lo (long-only) for high-return endpoint; correct for all parameter combinations without any tuple ordering assumptions |
+| 2.4 | March 2026 | Added mvp_row (ret.idxmin()) and hi_ret_row (ret.idxmax()) to eff_summary in calculations.py; EFR card display and tooltips now sourced entirely from these rows — Asset 1/2 Weight Range always shows MVP value → high-return endpoint value regardless of which asset has higher return |
 
 > **How to update:** Add a new row to this table whenever a design decision changes, noting what changed and why. Commit the updated `DESIGN.md` in the same pull request as the code change.
 
