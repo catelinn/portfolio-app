@@ -172,6 +172,33 @@ def _add_mvp_marker(fig, mvp):
     return fig
 
 
+def _add_key_portfolio_markers(fig, max_sr, max_ret_lo, max_ret_lev, allow_short):
+    """Add Max Sharpe, Max Return (Long Only), and Max Return (Leveraged) markers."""
+    markers = [
+        (max_sr,      "⭐ Max Sharpe",           COLORS["blue"],   "star-diamond", "top right"),
+        (max_ret_lo,  "⭐ Max Return (Long Only)", COLORS["green"],  "star-triangle-up", "top right"),
+    ]
+    if allow_short and max_ret_lev is not None:
+        markers.append(
+            (max_ret_lev, "⭐ Max Return (Leveraged)", COLORS["red"], "star-triangle-up", "top right")
+        )
+    for port, label, color, symbol, tpos in markers:
+        if port is None:
+            continue
+        fig.add_trace(go.Scatter(
+            x=[port["sd"]], y=[port["ret"]], mode="markers+text",
+            marker=dict(size=12, color=color, symbol=symbol,
+                        line=dict(width=1, color="white")),
+            text=[label], textposition=tpos,
+            textfont=dict(size=10, color=color),
+            name=label,
+            customdata=[[label, port["w_A1"]*100, port["w_A2"]*100, port["sharpe"]]],
+            hovertemplate=_hover_frontier(),
+            showlegend=True,
+        ))
+    return fig
+
+
 def _add_dominated_line(fig, frontier_df):
     """Add red dashed dominated region line to any frontier chart."""
     df_dom = frontier_df[frontier_df["region"] == "dominated"].sort_values("w_A1", ascending=False)
@@ -233,7 +260,7 @@ def _add_extreme_markers(fig, df):
 # TAB 1 — PORTFOLIO FRONTIER CHARTS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
+def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp, max_sr, max_ret_lo, max_ret_lev, allow_short=False):
     """
     Chart 1 — All Allocations (full frontier, requires short-selling ON).
     Shows 3 colored segments by weight region: long_only, short_A1, long_A1.
@@ -265,6 +292,7 @@ def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
         ))
 
     fig = _add_mvp_marker(fig, mvp)
+    fig = _add_key_portfolio_markers(fig, max_sr, max_ret_lo, max_ret_lev, allow_short)
     fig = _add_asset_markers(fig, frontier_df)
     fig = _add_extreme_markers(fig, frontier_df)
 
@@ -277,7 +305,7 @@ def chart_frontier_all(frontier_df, r1, sd1, r2, sd2, mvp):
     return fig
 
 
-def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
+def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp, max_sr, max_ret_lo, max_ret_lev=None, allow_short=False):
     """
     Chart 2 — Long Only (always visible).
     Upper portion = efficient frontier. Lower portion = dominated.
@@ -309,6 +337,7 @@ def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
         ))
 
     fig = _add_mvp_marker(fig, mvp)
+    fig = _add_key_portfolio_markers(fig, max_sr, max_ret_lo, max_ret_lev, allow_short)
     fig = _add_asset_markers(fig, df)
 
     # Vertical reference line through MVP
@@ -343,7 +372,7 @@ def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
     return fig
 
 
-def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
+def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2, max_sr, max_ret_lo, max_ret_lev=None, allow_short=False):
     """
     Chart 3 — Short Asset 1 / Long Asset 2 (requires short-selling ON).
     Shows efficient + dominated filtered to w_A1: −100% → 0% only.
@@ -376,6 +405,7 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
             hovertemplate=_hover_frontier(),
         ))
 
+    fig = _add_key_portfolio_markers(fig, max_sr, max_ret_lo, max_ret_lev, allow_short)
     fig = _add_asset_markers(fig, df)
     fig = _add_extreme_markers(fig, df)
 
@@ -401,7 +431,7 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
     return fig
 
 
-def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
+def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2, max_sr, max_ret_lo, max_ret_lev=None, allow_short=False):
     """
     Chart 4 — Long Asset 1 / Short Asset 2 (requires short-selling ON).
     Shows efficient + dominated filtered to w_A1: 100% → 200% only.
@@ -434,6 +464,7 @@ def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
             hovertemplate=_hover_frontier(),
         ))
 
+    fig = _add_key_portfolio_markers(fig, max_sr, max_ret_lo, max_ret_lev, allow_short)
     fig = _add_asset_markers(fig, df)
     fig = _add_extreme_markers(fig, df)
 

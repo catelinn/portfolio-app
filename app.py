@@ -529,31 +529,31 @@ with tab1:
         row1_c1, row1_c2 = st.columns(2)
         with row1_c1:
             st.plotly_chart(
-                chart_frontier_all(frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp),
+                chart_frontier_all(frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp, max_sr, max_ret_lo, max_ret_lev, allow_short=allow_short),
                 use_container_width=True, key="f_all"
             )
         with row1_c2:
             st.plotly_chart(
                 chart_frontier_long_only(
-                    frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp),
+                    frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp, max_sr, max_ret_lo),
                 use_container_width=True, key="f_effdom"
             )
         row2_c1, row2_c2 = st.columns(2)
         with row2_c1:
             st.plotly_chart(
-                chart_frontier_short_A1(frontier_df, f_r1, f_sd1, f_r2, f_sd2),
+                chart_frontier_short_A1(frontier_df, f_r1, f_sd1, f_r2, f_sd2, max_sr, max_ret_lo, max_ret_lev, allow_short=allow_short),
                 use_container_width=True, key="f_shortA1"
             )
         with row2_c2:
             st.plotly_chart(
-                chart_frontier_long_A1(frontier_df, f_r1, f_sd1, f_r2, f_sd2),
+                chart_frontier_long_A1(frontier_df, f_r1, f_sd1, f_r2, f_sd2, max_sr, max_ret_lo, max_ret_lev, allow_short=allow_short),
                 use_container_width=True, key="f_longA1"
             )
     else:
         # Single chart — efficient vs dominated only
         st.plotly_chart(
             chart_frontier_long_only(
-                frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp),
+                frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp, max_sr, max_ret_lo),
             use_container_width=True, key="f_effdom_only"
         )
 
