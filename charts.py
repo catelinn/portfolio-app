@@ -81,10 +81,10 @@ def _base_layout(title, xaxis_title, yaxis_title, subtitle=""):
         legend=dict(
             font=dict(size=11), bgcolor="rgba(255,255,255,0.85)",
             bordercolor="#CCCCCC", borderwidth=1,
-            x=1.01, y=1, xanchor="left",
+            x=1.02, y=1, xanchor="left",
             yanchor="top",
         ),
-        margin=dict(t=80, b=100, l=70, r=170),
+        margin=dict(t=80, b=110, l=70, r=220, autoexpand=True),
         hovermode="closest",
     )
 
@@ -204,7 +204,7 @@ def _add_extreme_markers(fig, df):
             x=[row["sd"]], y=[row["ret"]], mode="markers+text",
             marker=dict(size=9, color=COLORS["navy"], symbol="diamond-open",
                         line=dict(width=2, color=COLORS["navy"])),
-            text=["(200% A1, -100% A2)"], textposition="bottom right",
+            text=["(200% A1, -100% A2)"], textposition="bottom left",
             textfont=dict(size=10, color=COLORS["navy"]),
             name="(200% A1, -100% A2)",
             customdata=[[REGION_LABELS.get("long_A1",""), 200.0, -100.0, row["sharpe"]]],
@@ -219,7 +219,7 @@ def _add_extreme_markers(fig, df):
             x=[row["sd"]], y=[row["ret"]], mode="markers+text",
             marker=dict(size=9, color=COLORS["amber"], symbol="diamond-open",
                         line=dict(width=2, color=COLORS["amber"])),
-            text=["(-100% A1, 200% A2)"], textposition="bottom right",
+            text=["(-100% A1, 200% A2)"], textposition="bottom left",
             textfont=dict(size=10, color=COLORS["amber"]),
             name="(-100% A1, 200% A2)",
             customdata=[[REGION_LABELS.get("short_A1",""), -100.0, 200.0, row["sharpe"]]],
