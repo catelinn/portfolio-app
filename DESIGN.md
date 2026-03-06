@@ -3,7 +3,7 @@
 
 **Course:** FIN 511 — Investments I: Fundamentals of Performance Evaluation  
 **Module:** 1 — Lesson 1-5: Portfolio Choice in General Settings  
-**Version:** 1.5 | March 2026
+**Version:** 1.6 | March 2026
 
 ---
 
@@ -524,6 +524,7 @@ Items to consider for future versions:
 | 1.3 | March 2026 | Presets: renamed "Default"→"Baseline", removed "ρ=0" and "Assignment 1", added "ρ=1"; labels: "Asset 2"→"Asset 2 (more risky)" in expander and benchmark card; Chart 2 renamed "Long Only"; Chart 4 title removed "— Dominated"; all 4 charts now always show red dashed dominated line; Charts 3 & 4 show dominated annotation dynamically based on r1 vs r2 |
 | 1.4 | March 2026 | Charts 1, 3, 4: replaced region-colored lines with efficient+dominated only (dominated defined by MVP position, not long/short composition); added 200% A1 and 200% A2 open-diamond markers to Charts 1, 3, 4; removed separate orange/purple short-selling region lines; renamed chart function to chart_frontier_long_only |
 | 1.5 | March 2026 | Chart 1: restored 3-segment coloring (long only/short A1/long A1) all solid lines; Charts 2/3/4: filter frontier by weight_region before plotting efficient+dominated; Charts 3 & 4: pass filtered df to extreme markers so only in-range 200% markers appear; legend moved outside plot area to prevent overlap |
+| 1.6 | March 2026 | Aligned dominated annotation across Charts 2, 3, 4 to data-driven check (rows exist in filtered df) instead of r1 vs r2 comparison; added dominated annotation to Chart 2 |
 
 > **How to update:** Add a new row to this table whenever a design decision changes, noting what changed and why. Commit the updated `DESIGN.md` in the same pull request as the code change.
 
