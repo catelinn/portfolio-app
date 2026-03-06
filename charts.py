@@ -84,7 +84,7 @@ def _base_layout(title, xaxis_title, yaxis_title, subtitle=""):
             x=1.01, y=1, xanchor="left",
             yanchor="top",
         ),
-        margin=dict(t=80, b=60, l=70, r=160),
+        margin=dict(t=80, b=100, l=70, r=170),
         hovermode="closest",
     )
 
@@ -326,7 +326,8 @@ def chart_frontier_long_only(frontier_df, r1, sd1, r2, sd2, mvp):
     if not df_dom.empty:
         fig.add_annotation(
             text="⚠ Dominated region — same risk as portfolios<br>above MVP but lower return",
-            xref="paper", yref="paper", x=0.5, y=0.05,
+            xref="paper", yref="paper", x=0.5, y=-0.18,
+            xanchor="center", yanchor="top",
             showarrow=False,
             font=dict(size=11, color=COLORS["red"]),
             bgcolor="rgba(255,200,200,0.3)",
@@ -383,7 +384,8 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
     if not df_dom_c3.empty:
         fig.add_annotation(
             text="⚠ Dominated region — same risk as portfolios<br>above MVP but lower return",
-            xref="paper", yref="paper", x=0.5, y=0.05,
+            xref="paper", yref="paper", x=0.5, y=-0.18,
+            xanchor="center", yanchor="top",
             showarrow=False,
             font=dict(size=11, color=COLORS["red"]),
             bgcolor="rgba(255,200,200,0.3)",
@@ -440,7 +442,8 @@ def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
     if not df_dom_c4.empty:
         fig.add_annotation(
             text="⚠ Dominated region — same risk as portfolios<br>above MVP but lower return",
-            xref="paper", yref="paper", x=0.5, y=0.05,
+            xref="paper", yref="paper", x=0.5, y=-0.18,
+            xanchor="center", yanchor="top",
             showarrow=False,
             font=dict(size=11, color=COLORS["red"]),
             bgcolor="rgba(255,200,200,0.3)",
