@@ -118,31 +118,32 @@ def _hover_cal():
 
 
 def _add_asset_markers(fig, df):
-    """Add scatter markers for 100% Asset 1 and/or 100% Asset 2 if present in df."""
-    df_a1 = df[df["w_A1"].between(0.995, 1.005)]
+    """Add scatter markers for 100% Asset 1 and/or 100% Asset 2 if present in df.
+    Uses wider tolerance (±0.02) to catch boundary points at region edges."""
+    df_a1 = df[df["w_A1"].between(0.98, 1.02)]
     if not df_a1.empty:
-        row = df_a1.iloc[0]
+        row = df_a1.iloc[(df_a1["w_A1"] - 1.0).abs().argsort().iloc[0]]
         fig.add_trace(go.Scatter(
             x=[row["sd"]], y=[row["ret"]], mode="markers+text",
             marker=dict(size=10, color=COLORS["navy"],
                         symbol="diamond", line=dict(width=1, color="white")),
-            text=["100% Asset 1"], textposition="top right",
+            text=["(100% A1, 0% A2)"], textposition="top right",
             textfont=dict(size=10, color=COLORS["navy"]),
-            name="100% Asset 1",
+            name="(100% A1, 0% A2)",
             customdata=[[REGION_LABELS.get("efficient",""), 100.0, 0.0, row["sharpe"]]],
             hovertemplate=_hover_frontier(),
             showlegend=True,
         ))
-    df_a2 = df[df["w_A1"].between(-0.005, 0.005)]
+    df_a2 = df[df["w_A1"].between(-0.02, 0.02)]
     if not df_a2.empty:
-        row = df_a2.iloc[0]
+        row = df_a2.iloc[(df_a2["w_A1"] - 0.0).abs().argsort().iloc[0]]
         fig.add_trace(go.Scatter(
             x=[row["sd"]], y=[row["ret"]], mode="markers+text",
             marker=dict(size=10, color=COLORS["amber"],
                         symbol="diamond", line=dict(width=1, color="white")),
-            text=["100% Asset 2"], textposition="top right",
+            text=["(0% A1, 100% A2)"], textposition="top right",
             textfont=dict(size=10, color=COLORS["amber"]),
-            name="100% Asset 2",
+            name="(0% A1, 100% A2)",
             customdata=[[REGION_LABELS.get("efficient",""), 0.0, 100.0, row["sharpe"]]],
             hovertemplate=_hover_frontier(),
             showlegend=True,
@@ -203,9 +204,9 @@ def _add_extreme_markers(fig, df):
             x=[row["sd"]], y=[row["ret"]], mode="markers+text",
             marker=dict(size=9, color=COLORS["navy"], symbol="diamond-open",
                         line=dict(width=2, color=COLORS["navy"])),
-            text=["200% Asset 1"], textposition="bottom right",
+            text=["(200% A1, -100% A2)"], textposition="bottom right",
             textfont=dict(size=10, color=COLORS["navy"]),
-            name="200% Asset 1",
+            name="(200% A1, -100% A2)",
             customdata=[[REGION_LABELS.get("long_A1",""), 200.0, -100.0, row["sharpe"]]],
             hovertemplate=_hover_frontier(),
             showlegend=True,
@@ -218,9 +219,9 @@ def _add_extreme_markers(fig, df):
             x=[row["sd"]], y=[row["ret"]], mode="markers+text",
             marker=dict(size=9, color=COLORS["amber"], symbol="diamond-open",
                         line=dict(width=2, color=COLORS["amber"])),
-            text=["200% Asset 2"], textposition="bottom right",
+            text=["(-100% A1, 200% A2)"], textposition="bottom right",
             textfont=dict(size=10, color=COLORS["amber"]),
-            name="200% Asset 2",
+            name="(-100% A1, 200% A2)",
             customdata=[[REGION_LABELS.get("short_A1",""), -100.0, 200.0, row["sharpe"]]],
             hovertemplate=_hover_frontier(),
             showlegend=True,
@@ -347,7 +348,10 @@ def chart_frontier_short_A1(frontier_df, r1, sd1, r2, sd2):
     Shows efficient + dominated filtered to w_A1: −100% → 0% only.
     """
     fig = go.Figure()
-    df = frontier_df[frontier_df["weight_region"] == "short_A1"]
+    df = frontier_df[
+        (frontier_df["weight_region"] == "short_A1") |
+        (frontier_df["w_A1"].between(-0.02, 0.02))   # include w_A1=0 boundary
+    ]
 
     for region in ["efficient", "dominated"]:
         df_r = df[df["region"] == region].sort_values("w_A1", ascending=False)
@@ -401,7 +405,10 @@ def chart_frontier_long_A1(frontier_df, r1, sd1, r2, sd2):
     Shows efficient + dominated filtered to w_A1: 100% → 200% only.
     """
     fig = go.Figure()
-    df = frontier_df[frontier_df["weight_region"] == "long_A1"]
+    df = frontier_df[
+        (frontier_df["weight_region"] == "long_A1") |
+        (frontier_df["w_A1"].between(0.98, 1.02))    # include w_A1=1 boundary
+    ]
 
     for region in ["efficient", "dominated"]:
         df_r = df[df["region"] == region].sort_values("w_A1", ascending=False)
