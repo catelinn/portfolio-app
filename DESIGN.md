@@ -3,7 +3,7 @@
 
 **Course:** FIN 511 — Investments I: Fundamentals of Performance Evaluation  
 **Module:** 1 — Lesson 1-5: Portfolio Choice in General Settings  
-**Version:** 1.7 | March 2026
+**Version:** 1.9 | March 2026
 
 ---
 
@@ -526,6 +526,8 @@ Items to consider for future versions:
 | 1.5 | March 2026 | Chart 1: restored 3-segment coloring (long only/short A1/long A1) all solid lines; Charts 2/3/4: filter frontier by weight_region before plotting efficient+dominated; Charts 3 & 4: pass filtered df to extreme markers so only in-range 200% markers appear; legend moved outside plot area to prevent overlap |
 | 1.6 | March 2026 | Aligned dominated annotation across Charts 2, 3, 4 to data-driven check (rows exist in filtered df) instead of r1 vs r2 comparison; added dominated annotation to Chart 2 |
 | 1.7 | March 2026 | Renamed all markers to dual-weight labels e.g. "(100% A1, 0% A2)"; fixed missing boundary markers in Charts 3 & 4 by widening filter to ±0.02 around w_A1=0 and w_A1=1; all marker helpers fully data-driven with no hardcoded r1/sd1/r2/sd2 params |
+| 1.8 | March 2026 | Added Max Sharpe, Max Return (Long Only), and Max Return (Leveraged) markers to all 4 frontier charts via _add_key_portfolio_markers helper; leveraged marker conditional on allow_short |
+| 1.9 | March 2026 | Verified and documented that all frontier chart markers and lines are fully data-driven; _add_key_portfolio_markers checks w_A1 against filtered df before plotting; CAL chart hardcoding confirmed intentional |
 
 > **How to update:** Add a new row to this table whenever a design decision changes, noting what changed and why. Commit the updated `DESIGN.md` in the same pull request as the code change.
 
