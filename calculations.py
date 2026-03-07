@@ -531,6 +531,46 @@ def rho_mvp_table(r1, sd1, r2, sd2, rf,
     return pd.DataFrame(rows)
 
 
+def rho_msp_table(r1, sd1, r2, sd2, rf,
+                  rho_list=None, current_rho=0.4, allow_short=False):
+    """
+    Build the Max Sharpe Portfolio comparison table across correlation values
+    for Tab 2, mirroring rho_mvp_table.
+
+    Parameters
+    ----------
+    current_rho : float  highlights the current ρ row
+    allow_short : bool   if True, search is unconstrained
+
+    Returns
+    -------
+    pd.DataFrame with display-ready columns + 'is_current' flag
+    """
+    if rho_list is None:
+        rho_list = [-0.8, -0.4, 0.0, 0.4, 0.8]
+
+    if not any(abs(r - current_rho) < 1e-9 for r in rho_list):
+        rho_list = sorted(rho_list + [current_rho])
+
+    rows = []
+    for rho in rho_list:
+        df = build_frontier(r1, sd1, r2, sd2, rho, rf)
+        msp = find_max_sharpe(df, long_only=not allow_short)
+        w_star = msp["w_A1"]
+        ret, sd, sr = portfolio_stats(w_star, r1, sd1, r2, sd2, rho, rf)
+        rows.append({
+            "Correlation (ρ)": rho,
+            "Asset 1 Weight":  f"{w_star * 100:.1f}%",
+            "Asset 2 Weight":  f"{(1 - w_star) * 100:.1f}%",
+            "Std. Dev.":       f"{sd:.2f}%",
+            "Exp. Return":     f"{ret:.2f}%",
+            "Sharpe Ratio":    f"{sr:.3f}",
+            "is_current":      abs(rho - current_rho) < 1e-9,
+        })
+
+    return pd.DataFrame(rows)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 5. METRICS HELPERS
 # ══════════════════════════════════════════════════════════════════════════════

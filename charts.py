@@ -172,6 +172,27 @@ def _add_mvp_marker(fig, mvp):
     return fig
 
 
+def _add_msp_marker(fig, msp, label="MSP", show_legend=True):
+    """Add a diamond marker for the Max Sharpe Portfolio."""
+    fig.add_trace(go.Scatter(
+        x=[msp["sd"]], y=[msp["ret"]], mode="markers+text",
+        marker=dict(size=14, color=COLORS["blue"],
+                    symbol="star-diamond", line=dict(width=1, color="white")),
+        text=[label], textposition="top right",
+        textfont=dict(size=10, color=COLORS["blue"]),
+        name="Max Sharpe Portfolio",
+        customdata=[[
+            "Max Sharpe Portfolio",
+            msp["w_A1"] * 100,
+            msp["w_A2"] * 100,
+            msp["sharpe"],
+        ]],
+        hovertemplate=_hover_frontier(),
+        showlegend=show_legend,
+    ))
+    return fig
+
+
 def _add_key_portfolio_markers(fig, frontier_df, chart_regions, max_sr, max_ret_lo, max_ret_lev, allow_short):
     """Add Max Sharpe, Max Return (Long Only), and Max Return (Leveraged) markers.
     Only plots a marker if its w_A1 row in frontier_df has a chart_region in chart_regions.
@@ -735,14 +756,18 @@ def chart_cal_long_with_leverage(cal_df, r_risky, sd_risky, rf):
 # TAB 3 — CORRELATION EFFECT CHARTS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2, allow_short=False):
+def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2,
+                     mvp_points=None, msp_points=None, allow_short=False):
     """
     Tab 2 Chart 1 — Overlaid efficient frontiers for 5 correlation values.
     Current ρ is shown with thicker line and full opacity.
     All others are dashed with reduced opacity.
 
+    mvp_points : dict {rho: Series}  MVP row per frontier (optional)
+    msp_points : dict {rho: Series}  MSP row per frontier (optional)
+
     When allow_short=True, frontiers extend to the full short-selling range
-    and MVP markers reflect unconstrained weights.
+    and MVP/MSP markers reflect unconstrained weights.
     """
     fig = go.Figure()
 
@@ -773,6 +798,48 @@ def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2, allow_short=F
             )),
             hovertemplate=_hover_frontier(),
         ))
+
+    # MVP markers — one per frontier, legend shown only for first
+    if mvp_points:
+        for i, (rho, mvp) in enumerate(mvp_points.items()):
+            is_current = abs(rho - current_rho) < 1e-9
+            fig.add_trace(go.Scatter(
+                x=[mvp["sd"]], y=[mvp["ret"]], mode="markers+text",
+                marker=dict(size=10 if is_current else 7,
+                            color=COLORS["green"],
+                            symbol="star",
+                            line=dict(width=1, color="white"),
+                            opacity=1.0 if is_current else 0.5),
+                text=["MVP"] if is_current else [""],
+                textposition="top left",
+                textfont=dict(size=10, color=COLORS["green"]),
+                name="MVP" if i == 0 else None,
+                showlegend=(i == 0),
+                customdata=[["Min. Variance Portfolio", mvp["w_A1"] * 100,
+                              mvp["w_A2"] * 100, mvp["sharpe"]]],
+                hovertemplate=_hover_frontier(),
+            ))
+
+    # MSP markers — one per frontier, legend shown only for first
+    if msp_points:
+        for i, (rho, msp) in enumerate(msp_points.items()):
+            is_current = abs(rho - current_rho) < 1e-9
+            fig.add_trace(go.Scatter(
+                x=[msp["sd"]], y=[msp["ret"]], mode="markers+text",
+                marker=dict(size=10 if is_current else 7,
+                            color=COLORS["blue"],
+                            symbol="star-diamond",
+                            line=dict(width=1, color="white"),
+                            opacity=1.0 if is_current else 0.5),
+                text=["MSP"] if is_current else [""],
+                textposition="top right",
+                textfont=dict(size=10, color=COLORS["blue"]),
+                name="MSP" if i == 0 else None,
+                showlegend=(i == 0),
+                customdata=[["Max Sharpe Portfolio", msp["w_A1"] * 100,
+                              msp["w_A2"] * 100, msp["sharpe"]]],
+                hovertemplate=_hover_frontier(),
+            ))
 
     fig = _add_asset_markers(fig, current_df if current_df is not None else df)
 
@@ -832,6 +899,57 @@ def chart_rho_mvp_table(rho_mvp_df):
     fig.update_layout(
         title=dict(
             text="<b>Min. Variance Portfolio — Comparison Across Correlations</b>",
+            font=dict(size=14, color=COLORS["navy"]),
+            x=0, xanchor="left",
+        ),
+        margin=dict(t=60, b=20, l=0, r=0),
+        paper_bgcolor=COLORS["white"],
+    )
+    return fig
+
+
+def chart_rho_msp_table(rho_msp_df):
+    """
+    Tab 2 — Max Sharpe Portfolio comparison table as a Plotly table figure.
+    Highlights the current ρ row.
+    """
+    display_df = rho_msp_df.drop(columns=["is_current"]).copy()
+    display_df["Correlation (ρ)"] = rho_msp_df.apply(
+        lambda r: f"★ {r['Correlation (ρ)']}  ← current" if r["is_current"]
+                  else str(r["Correlation (ρ)"]),
+        axis=1
+    )
+
+    fill_colors = []
+    for _, row in rho_msp_df.iterrows():
+        if row["is_current"]:
+            fill_colors.append("#DDEEFF")
+        else:
+            fill_colors.append("#F8F9FA")
+
+    n_cols = len(display_df.columns)
+
+    fig = go.Figure(data=[go.Table(
+        columnwidth=[180, 140, 140, 120, 130, 120],
+        header=dict(
+            values=[f"<b>{c}</b>" for c in display_df.columns],
+            fill_color=COLORS["navy"],
+            font=dict(color="white", size=12),
+            align="center",
+            height=36,
+        ),
+        cells=dict(
+            values=[display_df[c].tolist() for c in display_df.columns],
+            fill_color=[fill_colors] * n_cols,
+            font=dict(color=COLORS["gray"], size=11),
+            align=["left"] + ["center"] * (n_cols - 1),
+            height=32,
+        ),
+    )])
+
+    fig.update_layout(
+        title=dict(
+            text="<b>Max Sharpe Portfolio — Comparison Across Correlations</b>",
             font=dict(size=14, color=COLORS["navy"]),
             x=0, xanchor="left",
         ),

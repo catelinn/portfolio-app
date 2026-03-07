@@ -15,7 +15,7 @@ from calculations import (
     find_mvp, find_max_sharpe, find_max_return,
     efficient_frontier_region, benchmark_stats,
     frontier_summary_table, cal_summary_table,
-    rho_mvp_table, cal_equation_str, rho_mvp_sd,
+    rho_mvp_table, rho_msp_table, cal_equation_str, rho_mvp_sd,
 )
 from charts import (
     chart_frontier_all,
@@ -28,6 +28,7 @@ from charts import (
     chart_cal_long_with_leverage,
     chart_rho_effect,
     chart_rho_mvp_table,
+    chart_rho_msp_table,
     chart_frontier_summary_table,
     chart_cal_summary_table,
 )
@@ -292,9 +293,19 @@ def compute_rho():
     ref_rhos = [-0.8, -0.4, 0.0, 0.4, 0.8]
     rho_list = ref_rhos if any(abs(rho - r) < 1e-9 for r in ref_rhos) \
                else sorted(ref_rhos + [round(rho, 2)])
+    rho_frontiers = build_rho_frontiers(r1, sd1, r2, sd2, rf, rho_list=rho_list, allow_short=short)
+    # Build per-frontier MVP and MSP point dicts for chart markers
+    mvp_points = {}
+    msp_points = {}
+    for _rho, _df in rho_frontiers.items():
+        mvp_points[_rho] = find_mvp(_df)
+        msp_points[_rho] = find_max_sharpe(_df, long_only=not short)
     return dict(
-        rho_frontiers = build_rho_frontiers(r1, sd1, r2, sd2, rf, rho_list=rho_list, allow_short=short),
+        rho_frontiers = rho_frontiers,
         rho_mvp_df    = rho_mvp_table(r1, sd1, r2, sd2, rf, current_rho=rho, allow_short=short),
+        rho_msp_df    = rho_msp_table(r1, sd1, r2, sd2, rf, current_rho=rho, allow_short=short),
+        mvp_points    = mvp_points,
+        msp_points    = msp_points,
         f_r1=r1, f_sd1=sd1, f_r2=r2, f_sd2=sd2, f_rho=rho, f_rf=rf,
     )
 
@@ -639,6 +650,9 @@ with tab2:
     _r = compute_rho()
     rho_frontiers = _r["rho_frontiers"]
     rho_mvp_df    = _r["rho_mvp_df"]
+    rho_msp_df    = _r["rho_msp_df"]
+    mvp_points    = _r["mvp_points"]
+    msp_points    = _r["msp_points"]
     f_r1, f_sd1   = _r["f_r1"], _r["f_sd1"]
     f_r2, f_sd2   = _r["f_r2"], _r["f_sd2"]
     f_rho, f_rf   = _r["f_rho"], _r["f_rf"]
@@ -702,12 +716,34 @@ with tab2:
         help=benefit_help,
     )
 
+    # ── MSP metrics at current ρ ──────────────────────────────────────────────
+    st.markdown("#### Max Sharpe Portfolio at Current ρ")
+    _msp_curr = next(
+        (v for k, v in msp_points.items() if abs(k - f_rho) < 1e-9),
+        list(msp_points.values())[-1]
+    )
+    _mc1, _mc2, _mc3, _mc4 = st.columns(4)
+    _mc1.metric(f"MSP Asset 1 Weight at ρ={f_rho:.1f}",
+                f"{_msp_curr['w_A1'] * 100:.1f}%",
+                help="Weight in Asset 1 for the Max Sharpe Portfolio at the current correlation")
+    _mc2.metric(f"MSP Std. Dev. at ρ={f_rho:.1f}",
+                f"{_msp_curr['sd']:.2f}%",
+                help="Portfolio std dev of the Max Sharpe Portfolio at the current correlation")
+    _mc3.metric(f"MSP Exp. Return at ρ={f_rho:.1f}",
+                f"{_msp_curr['ret']:.2f}%",
+                help="Expected return of the Max Sharpe Portfolio at the current correlation")
+    _mc4.metric(f"MSP Sharpe Ratio at ρ={f_rho:.1f}",
+                f"{_msp_curr['sharpe']:.3f}",
+                help="Sharpe ratio of the Max Sharpe Portfolio at the current correlation")
+
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
     # ── CHARTS ───────────────────────────────────────────────────────────────
     st.markdown("#### Effect of Correlation on the Efficient Frontier")
     st.plotly_chart(
-        chart_rho_effect(rho_frontiers, f_rho, f_r1, f_sd1, f_r2, f_sd2, allow_short=allow_short),
+        chart_rho_effect(rho_frontiers, f_rho, f_r1, f_sd1, f_r2, f_sd2,
+                         mvp_points=mvp_points, msp_points=msp_points,
+                         allow_short=allow_short),
         use_container_width=True, key="rho_chart"
     )
     _note1 = (
@@ -729,6 +765,12 @@ with tab2:
     st.plotly_chart(
         chart_rho_mvp_table(rho_mvp_df),
         use_container_width=True, key="rho_mvp_tbl"
+    )
+
+    st.markdown("#### Max Sharpe Portfolio — Comparison Across Correlations")
+    st.plotly_chart(
+        chart_rho_msp_table(rho_msp_df),
+        use_container_width=True, key="rho_msp_tbl"
     )
 
     st.caption(
