@@ -288,9 +288,10 @@ def compute_rho():
     r1, sd1 = st.session_state.f_r1, st.session_state.f_sd1
     r2, sd2 = st.session_state.f_r2, st.session_state.f_sd2
     rho, rf = st.session_state.f_rho, st.session_state.f_rf
+    short   = st.session_state.allow_short
     return dict(
-        rho_frontiers = build_rho_frontiers(r1, sd1, r2, sd2, rf),
-        rho_mvp_df    = rho_mvp_table(r1, sd1, r2, sd2, rf, current_rho=rho),
+        rho_frontiers = build_rho_frontiers(r1, sd1, r2, sd2, rf, allow_short=short),
+        rho_mvp_df    = rho_mvp_table(r1, sd1, r2, sd2, rf, current_rho=rho, allow_short=short),
         f_r1=r1, f_sd1=sd1, f_r2=r2, f_sd2=sd2, f_rho=rho, f_rf=rf,
     )
 
@@ -639,22 +640,34 @@ with tab2:
     f_r2, f_sd2   = _r["f_r2"], _r["f_sd2"]
     f_rho, f_rf   = _r["f_rho"], _r["f_rf"]
 
-    st.markdown(
-        "<div class='info-box'>"
-        "ℹ️ Correlation frontiers are always displayed as long-only "
-        "(Asset 1 & Asset 2 Weights: 0% → 100%) regardless of the short-selling setting. "
-        "This is consistent with how Prof. Weisbenner presents correlation effects in Lesson 1-5."
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    if not allow_short:
+        st.markdown(
+            "<div class='info-box'>"
+            "ℹ️ Correlation frontiers are displayed as long-only "
+            "(Asset 1 & Asset 2 Weights: 0% → 100%). "
+            "This is consistent with how Prof. Weisbenner presents correlation effects in Lesson 1-5. "
+            "Enable short-selling in the sidebar to see how unconstrained MVP weights change across correlations."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            "<div class='warn-box'>"
+            "⚠️ <b>Short-selling is enabled.</b> "
+            "Frontiers now extend to Asset 1 Weight: −100% → +200%, revealing the full diversification curve. "
+            "MVP weights are unconstrained — they may fall outside [0%, 100%], "
+            "producing lower minimum variance than the long-only case."
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
     # ── METRICS ──────────────────────────────────────────────────────────────
     st.markdown("#### Correlation Metrics")
 
-    mvp_sd_neg1 = rho_mvp_sd(f_sd1, f_sd2, -1.0)
-    mvp_sd_zero = rho_mvp_sd(f_sd1, f_sd2,  0.0)
-    mvp_sd_pos1 = rho_mvp_sd(f_sd1, f_sd2,  1.0)
-    mvp_sd_curr = rho_mvp_sd(f_sd1, f_sd2,  f_rho)
+    mvp_sd_neg1 = rho_mvp_sd(f_sd1, f_sd2, -1.0, allow_short=allow_short)
+    mvp_sd_zero = rho_mvp_sd(f_sd1, f_sd2,  0.0, allow_short=allow_short)
+    mvp_sd_pos1 = rho_mvp_sd(f_sd1, f_sd2,  1.0, allow_short=allow_short)
+    mvp_sd_curr = rho_mvp_sd(f_sd1, f_sd2,  f_rho, allow_short=allow_short)
 
     r1, r2, r3, r4 = st.columns(4)
     r1.metric("Current ρ",              f"{f_rho:.1f}")
@@ -688,7 +701,7 @@ with tab2:
     # ── CHARTS ───────────────────────────────────────────────────────────────
     st.markdown("#### Effect of Correlation on the Efficient Frontier")
     st.plotly_chart(
-        chart_rho_effect(rho_frontiers, f_rho, f_r1, f_sd1, f_r2, f_sd2),
+        chart_rho_effect(rho_frontiers, f_rho, f_r1, f_sd1, f_r2, f_sd2, allow_short=allow_short),
         use_container_width=True, key="rho_chart"
     )
 

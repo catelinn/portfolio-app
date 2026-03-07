@@ -735,11 +735,14 @@ def chart_cal_long_with_leverage(cal_df, r_risky, sd_risky, rf):
 # TAB 3 — CORRELATION EFFECT CHARTS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2):
+def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2, allow_short=False):
     """
-    Tab 3 Chart 1 — Overlaid efficient frontiers for 5 correlation values.
+    Tab 2 Chart 1 — Overlaid efficient frontiers for 5 correlation values.
     Current ρ is shown with thicker line and full opacity.
     All others are dashed with reduced opacity.
+
+    When allow_short=True, frontiers extend to the full short-selling range
+    and MVP markers reflect unconstrained weights.
     """
     fig = go.Figure()
 
@@ -771,8 +774,13 @@ def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2):
 
     fig = _add_asset_markers(fig, df)
 
+    if allow_short:
+        annotation_text = "Full frontier: Asset 1 Weight −100% → +200% (short-selling enabled — MVP weights unconstrained)"
+    else:
+        annotation_text = "Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)"
+
     fig.add_annotation(
-        text="Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)",
+        text=annotation_text,
         xref="paper", yref="paper", x=0.0, y=-0.12,
         showarrow=False, font=dict(size=10, color=COLORS["gray"]),
         xanchor="left",
