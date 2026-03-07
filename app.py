@@ -672,8 +672,11 @@ with tab2:
     mvp_sd_pos1 = rho_mvp_sd(f_sd1, f_sd2,  1.0, allow_short=allow_short)
     mvp_sd_curr = rho_mvp_sd(f_sd1, f_sd2,  f_rho, allow_short=allow_short)
 
+    st.metric("Current ρ", f"{f_rho:.1f}")
+
     r1, r2, r3, r4 = st.columns(4)
-    r1.metric("Current ρ",              f"{f_rho:.1f}")
+    r1.metric(f"MVP Std. Dev. at ρ={f_rho:.1f}",  f"{mvp_sd_curr:.2f}%",
+              help="MVP std dev at the current correlation")
     r2.metric("MVP Std. Dev. at ρ=−1",  f"{mvp_sd_neg1:.2f}%",
               help="Lowest achievable risk — perfect negative correlation")
     r3.metric("MVP Std. Dev. at ρ=0",   f"{mvp_sd_zero:.2f}%",
