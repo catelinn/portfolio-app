@@ -679,7 +679,7 @@ with tab2:
         )
 
     # ── METRICS ──────────────────────────────────────────────────────────────
-    st.markdown("#### Correlation Metrics")
+    st.markdown("#### Current Rho (Correlation)")
 
     mvp_sd_neg1 = rho_mvp_sd(f_sd1, f_sd2, -1.0, allow_short=allow_short)
     mvp_sd_zero = rho_mvp_sd(f_sd1, f_sd2,  0.0, allow_short=allow_short)
@@ -717,7 +717,7 @@ with tab2:
     )
 
     # ── MSP metrics at current ρ ──────────────────────────────────────────────
-    st.markdown("#### Max Sharpe Portfolio at Current ρ")
+    st.markdown("#### Max Sharpe Ratio Portfolio at Current Rho")
     _msp_curr = next(
         (v for k, v in msp_points.items() if abs(k - f_rho) < 1e-9),
         list(msp_points.values())[-1]
@@ -761,13 +761,13 @@ with tab2:
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-    st.markdown("#### Min. Variance Portfolio — Comparison Across Correlations")
+    st.markdown("#### MVP Std. Dev. Comparison Across Correlation")
     st.plotly_chart(
         chart_rho_mvp_table(rho_mvp_df),
         use_container_width=True, key="rho_mvp_tbl"
     )
 
-    st.markdown("#### Max Sharpe Portfolio — Comparison Across Correlations")
+    st.markdown("#### Max Sharpe Ratio Portfolio Comparison Across Correlation")
     st.plotly_chart(
         chart_rho_msp_table(rho_msp_df),
         use_container_width=True, key="rho_msp_tbl"
