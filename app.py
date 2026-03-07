@@ -604,6 +604,11 @@ with tab1:
 # ────────────────────────────────────────────────────────────────────────────
 with tab2:
 
+    # ── Sync rho_f_* slider keys from canonical keys (so Tab 1 changes reflect here) ──
+    for _src, _dst in [("f_r1","rho_f_r1"), ("f_sd1","rho_f_sd1"), ("f_r2","rho_f_r2"),
+                       ("f_sd2","rho_f_sd2"), ("f_rho","rho_f_rho"), ("f_rf","rho_f_rf")]:
+        st.session_state[_dst] = st.session_state[_src]
+
     # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
     st.markdown("<div class='param-banner'>⚙️ Parameters — Correlation Effect &nbsp;·&nbsp; shared with Portfolio Frontier</div>", unsafe_allow_html=True)
     with st.expander("⚙️ Parameters — Correlation Effect  (shared with Portfolio Frontier)", expanded=False):
