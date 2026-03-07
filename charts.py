@@ -130,7 +130,7 @@ def _add_asset_markers(fig, df):
             text=["(100% A1, 0% A2)"], textposition="top right",
             textfont=dict(size=10, color=COLORS["navy"]),
             name="(100% A1, 0% A2)",
-            customdata=[[REGION_LABELS.get("efficient",""), 100.0, 0.0, row["sharpe"]]],
+            customdata=[[REGION_LABELS[row["region"]], 100.0, 0.0, row["sharpe"]]],
             hovertemplate=_hover_frontier(),
             showlegend=True,
         ))
@@ -144,7 +144,7 @@ def _add_asset_markers(fig, df):
             text=["(0% A1, 100% A2)"], textposition="top right",
             textfont=dict(size=10, color=COLORS["amber"]),
             name="(0% A1, 100% A2)",
-            customdata=[[REGION_LABELS.get("efficient",""), 0.0, 100.0, row["sharpe"]]],
+            customdata=[[REGION_LABELS[row["region"]], 0.0, 100.0, row["sharpe"]]],
             hovertemplate=_hover_frontier(),
             showlegend=True,
         ))
@@ -746,12 +746,14 @@ def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2, allow_short=F
     """
     fig = go.Figure()
 
+    current_df = None
     for rho, df in rho_frontiers.items():
         is_current = abs(rho - current_rho) < 1e-9
         color      = RHO_COLORS.get(rho, "#7B2D8B" if is_current else COLORS["blue"])
         label      = f"ρ = {rho}"
         if is_current:
             label += "  ← current"
+            current_df = df
 
         fig.add_trace(go.Scatter(
             x=df["sd"], y=df["ret"],
@@ -772,7 +774,7 @@ def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2, allow_short=F
             hovertemplate=_hover_frontier(),
         ))
 
-    fig = _add_asset_markers(fig, df)
+    fig = _add_asset_markers(fig, current_df if current_df is not None else df)
 
     if allow_short:
         annotation_text = "Full frontier: Asset 1 Weight −100% → +200% (short-selling enabled — MVP weights unconstrained)"
