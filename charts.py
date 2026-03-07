@@ -777,16 +777,9 @@ def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2, allow_short=F
     fig = _add_asset_markers(fig, current_df if current_df is not None else df)
 
     if allow_short:
-        annotation_text = "Full frontier: Asset 1 Weight −100% → +200% (short-selling enabled — MVP weights unconstrained)"
+        annotation_text = "• Full frontier: Asset 1 Weight −100% → +200% (short-selling enabled — MVP weights unconstrained)"
     else:
-        annotation_text = "Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)"
-
-    fig.add_annotation(
-        text=annotation_text,
-        xref="paper", yref="paper", x=0.0, y=-0.12,
-        showarrow=False, font=dict(size=10, color=COLORS["gray"]),
-        xanchor="left",
-    )
+        annotation_text = "• Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)"
 
     fig.update_layout(_base_layout(
         title="Effect of Correlation on the Efficient Frontier",
@@ -794,6 +787,20 @@ def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2, allow_short=F
         yaxis_title="Portfolio Exp. Return (%)",
         subtitle="Lower ρ → frontier bows further left → more diversification benefit",
     ))
+    fig.update_layout(margin=dict(b=160))
+
+    fig.add_annotation(
+        text=annotation_text,
+        xref="paper", yref="paper", x=0.0, y=-0.14,
+        showarrow=False, font=dict(size=10, color=COLORS["gray"]),
+        xanchor="left",
+    )
+    fig.add_annotation(
+        text="• Asset markers (100% A1, 0% A2) and (0% A1, 100% A2) are ρ-invariant — all frontier curves share the same endpoints",
+        xref="paper", yref="paper", x=0.0, y=-0.21,
+        showarrow=False, font=dict(size=10, color=COLORS["gray"]),
+        xanchor="left",
+    )
     return fig
 
 
