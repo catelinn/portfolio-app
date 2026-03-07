@@ -710,6 +710,17 @@ with tab2:
         chart_rho_effect(rho_frontiers, f_rho, f_r1, f_sd1, f_r2, f_sd2, allow_short=allow_short),
         use_container_width=True, key="rho_chart"
     )
+    _note1 = (
+        "• Full frontier: Asset 1 Weight −100% → +200% (short-selling enabled — MVP weights unconstrained)"
+        if allow_short
+        else "• Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)"
+    )
+    st.markdown(
+        f"<small>{_note1}<br>"
+        "• Asset markers (100% A1, 0% A2) and (0% A1, 100% A2) are ρ-invariant — "
+        "all frontier curves share the same endpoints</small>",
+        unsafe_allow_html=True,
+    )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
