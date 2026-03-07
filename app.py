@@ -68,6 +68,11 @@ st.markdown("""
         padding: 12px 16px;
     }
 
+    /* Reduce metric value font size app-wide */
+    div[data-testid="stMetricValue"] {
+        font-size: 1.25rem !important;
+    }
+
     /* Section headers in sidebar */
     .sidebar-section {
         font-size: 0.78rem;
