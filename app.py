@@ -9,6 +9,7 @@ Run with: streamlit run app.py
 
 import streamlit as st
 import pandas as pd
+import anthropic
 
 from calculations import (
     build_frontier, build_cal, build_rho_frontiers,
@@ -184,6 +185,9 @@ for key, val in DEFAULTS.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
+if "chat_messages" not in st.session_state:
+    st.session_state.chat_messages = []
+
 
 def apply_preset(preset):
     """Store preset values under pending_ keys — sliders pick them up on next rerun."""
@@ -315,10 +319,11 @@ st.markdown(
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
 
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "📊  Portfolio Frontier",
     "🔗  Correlation Effect",
     "📈  Capital Allocation Line",
+    "💬  AI Assistant",
 ])
 
 
@@ -914,3 +919,73 @@ with tab3:
 
 
 # ────────────────────────────────────────────────────────────────────────────
+# TAB 4 — AI ASSISTANT
+# ────────────────────────────────────────────────────────────────────────────
+with tab4:
+    st.markdown("#### 💬 Portfolio Theory AI Assistant")
+    st.caption(
+        "Ask questions about portfolio theory, the Efficient Frontier, CAL, "
+        "diversification, Sharpe Ratio, and more. Your chat history is preserved "
+        "for this session."
+    )
+
+    # Display chat history
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Clear history button
+    if st.session_state.chat_messages:
+        if st.button("🗑️ Clear chat history", key="clear_chat"):
+            st.session_state.chat_messages = []
+            st.rerun()
+
+    # Chat input
+    if prompt := st.chat_input("Ask about portfolio theory…"):
+        # Append and display user message
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Build messages list for the API (full history for context)
+        api_messages = [
+            {"role": m["role"], "content": m["content"]}
+            for m in st.session_state.chat_messages
+        ]
+
+        # Call Claude API and stream response
+        with st.chat_message("assistant"):
+            response_placeholder = st.empty()
+            full_response = ""
+
+            try:
+                client = anthropic.Anthropic()
+                with client.messages.stream(
+                    model="claude-opus-4-6",
+                    max_tokens=1024,
+                    system=(
+                        "You are an expert tutor for FIN 511 Investments I, Module 1. "
+                        "You help students understand portfolio theory concepts including: "
+                        "the Efficient Frontier, Minimum Variance Portfolio (MVP), "
+                        "Maximum Sharpe Ratio portfolio, Capital Allocation Line (CAL), "
+                        "diversification, correlation effects, short-selling, leverage, "
+                        "and risk-return tradeoffs. "
+                        "Explain concepts clearly with formulas when helpful. "
+                        "Keep answers concise and educational."
+                    ),
+                    messages=api_messages,
+                ) as stream:
+                    for text in stream.text_stream:
+                        full_response += text
+                        response_placeholder.markdown(full_response + "▌")
+                    response_placeholder.markdown(full_response)
+
+                st.session_state.chat_messages.append(
+                    {"role": "assistant", "content": full_response}
+                )
+            except anthropic.AuthenticationError:
+                response_placeholder.error(
+                    "API key not configured. Set the ANTHROPIC_API_KEY environment variable."
+                )
+            except Exception as e:
+                response_placeholder.error(f"Error: {e}")
