@@ -679,7 +679,7 @@ with tab2:
         )
 
     # ── METRICS ──────────────────────────────────────────────────────────────
-    st.markdown("#### Current Rho (Correlation)")
+    st.markdown("#### Current ρ (Correlation)")
 
     mvp_sd_neg1 = rho_mvp_sd(f_sd1, f_sd2, -1.0, allow_short=allow_short)
     mvp_sd_zero = rho_mvp_sd(f_sd1, f_sd2,  0.0, allow_short=allow_short)
