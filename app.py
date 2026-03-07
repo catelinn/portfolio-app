@@ -360,7 +360,7 @@ with tab1:
             f_r1  = st.slider("Exp. Return (%)",  0.0, 25.0, _val("f_r1"),  0.5, key="f_r1")
             f_sd1 = st.slider("Std. Dev. (%)",    5.0, 60.0, _val("f_sd1"), 1.0, key="f_sd1")
         with pc2:
-            st.markdown("**Asset 2 (more risky)**")
+            st.markdown("**Asset 2 (more volatile)**")
             f_r2   = st.slider("Exp. Return (%) ", 0.0, 30.0, _val("f_r2"), 0.5, key="f_r2")
             sd2_min = f_sd1 + 1.0
             sd2_val = max(_val("f_sd2"), sd2_min)
@@ -647,7 +647,7 @@ with tab2:
             f_r1  = st.slider("Exp. Return (%)",  0.0, 25.0, st.session_state.f_r1,  0.5, key="rho_f_r1",  on_change=lambda: st.session_state.update(f_r1=st.session_state.rho_f_r1))
             f_sd1 = st.slider("Std. Dev. (%)",    5.0, 60.0, st.session_state.f_sd1, 1.0, key="rho_f_sd1", on_change=lambda: st.session_state.update(f_sd1=st.session_state.rho_f_sd1))
         with rc2:
-            st.markdown("**Asset 2 (more risky)**")
+            st.markdown("**Asset 2 (more volatile)**")
             f_r2  = st.slider("Exp. Return (%) ", 0.0, 30.0, _val("f_r2"),  0.5, key="rho_f_r2",  on_change=lambda: st.session_state.update(f_r2=st.session_state.rho_f_r2))
             f_sd2 = st.slider("Std. Dev. (%)  ",  _val("f_sd1")+1, 80.0, _val("f_sd2"), 1.0, key="rho_f_sd2", on_change=lambda: st.session_state.update(f_sd2=st.session_state.rho_f_sd2))
         with rc3:
