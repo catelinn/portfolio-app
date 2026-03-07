@@ -709,7 +709,7 @@ with tab2:
         benefit_label = f"σ reduced by {abs_diff:.2f}%  ✅ (MVP σ: {mvp_sd_curr:.2f}% vs {mvp_sd_zero:.2f}% at ρ=0)"
         benefit_help  = f"At ρ={f_rho:.1f}, MVP std dev is {mvp_sd_curr:.2f}% — lower than {mvp_sd_zero:.2f}% at ρ=0. Current correlation improves diversification."
     else:
-        benefit_label = f"σ increased by {abs_diff:.2f}%  ⚠️ (MVP σ: {mvp_sd_curr:.2f}% vs {mvp_sd_zero:.2f}% at ρ=0)"
+        benefit_label = f"⚠️ MVP σ increased by {abs_diff:.2f}% at current ρ"
         benefit_help  = f"At ρ={f_rho:.1f}, MVP std dev is {mvp_sd_curr:.2f}% — higher than {mvp_sd_zero:.2f}% at ρ=0. Current correlation reduces diversification benefit."
     st.metric(
         f"Diversification vs ρ=0 (current ρ={f_rho:.1f})",
