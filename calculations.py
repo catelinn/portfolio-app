@@ -231,12 +231,13 @@ def build_cal(r_risky, sd_risky, rf,
 
 
 def build_rho_frontiers(r1, sd1, r2, sd2, rf,
-                        rho_list=None, w_step=0.02):
+                        rho_list=None, w_step=0.02, allow_short=False):
     """
-    Build long-only frontiers for multiple correlation values.
-    Used in Tab 3 — Correlation Effect.
+    Build frontiers for multiple correlation values.
+    Used in Tab 2 — Correlation Effect.
 
-    Always long-only (w: 0 → 1) per Prof. Weisbenner's lecture.
+    Long-only (w: 0 → 1) when allow_short=False per Prof. Weisbenner's lecture.
+    Full range (w: -1 → 2) when allow_short=True.
 
     Parameters
     ----------
@@ -245,6 +246,7 @@ def build_rho_frontiers(r1, sd1, r2, sd2, rf,
     rf      : float  risk-free rate
     rho_list: list   correlations to compute (default: [-0.8,-0.4,0,0.4,0.8])
     w_step  : float  step size (coarser = faster for comparison chart)
+    allow_short : bool  if True, scan full weight range including short-selling
 
     Returns
     -------
@@ -254,7 +256,10 @@ def build_rho_frontiers(r1, sd1, r2, sd2, rf,
     if rho_list is None:
         rho_list = [-0.8, -0.4, 0.0, 0.4, 0.8]
 
-    weights = np.arange(0.0, 1.0 + w_step / 2, w_step)
+    if allow_short:
+        weights = np.arange(W_MIN, W_MAX + w_step / 2, w_step)
+    else:
+        weights = np.arange(0.0, 1.0 + w_step / 2, w_step)
     result  = {}
 
     for rho in rho_list:
@@ -484,13 +489,14 @@ def cal_summary_table(r_risky, sd_risky, rf, allow_short=False):
 
 
 def rho_mvp_table(r1, sd1, r2, sd2, rf,
-                  rho_list=None, current_rho=0.4):
+                  rho_list=None, current_rho=0.4, allow_short=False):
     """
-    Build the MVP comparison table across correlation values for Tab 3.
+    Build the MVP comparison table across correlation values for Tab 2.
 
     Parameters
     ----------
     current_rho : float  highlights the current ρ row
+    allow_short : bool   if True, MVP weight is unconstrained (can be <0 or >1)
 
     Returns
     -------
@@ -501,8 +507,9 @@ def rho_mvp_table(r1, sd1, r2, sd2, rf,
 
     rows = []
     for rho in rho_list:
-        w_star      = mvp_weight(sd1, sd2, rho)
-        w_star      = max(0.0, min(1.0, w_star))   # clamp to long-only
+        w_star = mvp_weight(sd1, sd2, rho)
+        if not allow_short:
+            w_star = max(0.0, min(1.0, w_star))   # clamp to long-only
         ret, sd, sr = portfolio_stats(w_star, r1, sd1, r2, sd2, rho, rf)
         rows.append({
             "Correlation (ρ)":  rho,
@@ -561,13 +568,18 @@ def cal_equation_str(r_risky, sd_risky, rf):
     return f"Exp. Return = {rf:.1f}% + {sr:.3f} × Std. Dev."
 
 
-def rho_mvp_sd(sd1, sd2, rho):
+def rho_mvp_sd(sd1, sd2, rho, allow_short=False):
     """
     Return the MVP Std. Dev. for a given correlation.
-    Used in Tab 3 top metrics.
+    Used in Tab 2 top metrics.
+
+    Parameters
+    ----------
+    allow_short : bool  if True, MVP weight is unconstrained (can be <0 or >1)
     """
     w = mvp_weight(sd1, sd2, rho)
-    w = max(0.0, min(1.0, w))
+    if not allow_short:
+        w = max(0.0, min(1.0, w))
     variance = (w**2 * sd1**2
                 + (1 - w)**2 * sd2**2
                 + 2 * w * (1 - w) * rho * sd1 * sd2)
