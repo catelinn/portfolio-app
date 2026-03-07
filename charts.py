@@ -748,7 +748,7 @@ def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2, allow_short=F
 
     for rho, df in rho_frontiers.items():
         is_current = abs(rho - current_rho) < 1e-9
-        color      = RHO_COLORS.get(rho, COLORS["blue"])
+        color      = RHO_COLORS.get(rho, "#7B2D8B" if is_current else COLORS["blue"])
         label      = f"ρ = {rho}"
         if is_current:
             label += "  ← current"
