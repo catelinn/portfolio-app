@@ -331,9 +331,9 @@ st.markdown(
 # ══════════════════════════════════════════════════════════════════════════════
 
 tab1, tab2, tab3 = st.tabs([
-    "📊  Portfolio Frontier",
-    "🔗  Correlation Effect",
-    "📈  Capital Allocation Line",
+    "📊  Portfolio Frontier (Two Risky Assets)",
+    "🔗  Correlation Effect (Two Risky Assets)",
+    "📈  Capital Allocation Line (One Free Risk, One Risky)",
 ])
 
 
@@ -774,11 +774,7 @@ with tab2:
         use_container_width=True, key="rho_msp_tbl"
     )
 
-    st.caption(
-        "💡 Assignment 1: Set ρ = −0.8 using the sidebar slider. "
-        "Notice how MVP Std. Dev. drops dramatically — "
-        "lower correlation means more diversification benefit."
-    )
+
 # TAB 3 — CAPITAL ALLOCATION LINE
 # ────────────────────────────────────────────────────────────────────────────
 with tab3:
