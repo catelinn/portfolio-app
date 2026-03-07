@@ -718,7 +718,7 @@ with tab2:
     )
 
     # ── MSP metrics at current ρ ──────────────────────────────────────────────
-    st.markdown("#### Max Sharpe Ratio Portfolio at Current Rho")
+    st.markdown("#### Max Sharpe Ratio Portfolio at Current ρ")
     _msp_curr = next(
         (v for k, v in msp_points.items() if abs(k - f_rho) < 1e-9),
         list(msp_points.values())[-1]
