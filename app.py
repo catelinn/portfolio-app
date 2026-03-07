@@ -660,12 +660,22 @@ with tab2:
     r4.metric("MVP Std. Dev. at ρ=+1",  f"{mvp_sd_pos1:.2f}%",
               help="No diversification benefit — assets move in lockstep")
 
-    # Diversification benefit vs ρ=0
-    benefit = mvp_sd_zero - mvp_sd_curr
+    # Diversification vs ρ=0 — derived purely from computed MVP std devs, no assumptions
+    benefit = mvp_sd_zero - mvp_sd_curr  # positive = current is better than ρ=0
+    abs_diff = abs(benefit)
+    if abs_diff < 0.005:
+        benefit_label = f"σ unchanged vs ρ=0  (both {mvp_sd_curr:.2f}%)"
+        benefit_help  = "Current ρ produces the same MVP std dev as ρ=0 given these asset parameters."
+    elif benefit > 0:
+        benefit_label = f"σ reduced by {abs_diff:.2f}%  ✅ (MVP σ: {mvp_sd_curr:.2f}% vs {mvp_sd_zero:.2f}% at ρ=0)"
+        benefit_help  = f"At ρ={f_rho:.1f}, MVP std dev is {mvp_sd_curr:.2f}% — lower than {mvp_sd_zero:.2f}% at ρ=0. Current correlation improves diversification."
+    else:
+        benefit_label = f"σ increased by {abs_diff:.2f}%  ⚠️ (MVP σ: {mvp_sd_curr:.2f}% vs {mvp_sd_zero:.2f}% at ρ=0)"
+        benefit_help  = f"At ρ={f_rho:.1f}, MVP std dev is {mvp_sd_curr:.2f}% — higher than {mvp_sd_zero:.2f}% at ρ=0. Current correlation reduces diversification benefit."
     st.metric(
-        f"Diversification Benefit vs ρ=0 (current ρ={f_rho:.1f})",
-        f"σ reduced by {benefit:.2f}%",
-        help="How much the current correlation reduces MVP Std. Dev. vs zero correlation",
+        f"Diversification vs ρ=0 (current ρ={f_rho:.1f})",
+        benefit_label,
+        help=benefit_help,
     )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
