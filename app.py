@@ -68,6 +68,11 @@ st.markdown("""
         padding: 12px 16px;
     }
 
+    /* Reduce metric value font size app-wide */
+    div[data-testid="stMetricValue"] {
+        font-size: 1.25rem !important;
+    }
+
     /* Section headers in sidebar */
     .sidebar-section {
         font-size: 0.78rem;
@@ -672,14 +677,10 @@ with tab2:
     else:
         benefit_label = f"σ increased by {abs_diff:.2f}%  ⚠️ (MVP σ: {mvp_sd_curr:.2f}% vs {mvp_sd_zero:.2f}% at ρ=0)"
         benefit_help  = f"At ρ={f_rho:.1f}, MVP std dev is {mvp_sd_curr:.2f}% — higher than {mvp_sd_zero:.2f}% at ρ=0. Current correlation reduces diversification benefit."
-    st.markdown(
-        f"""<div style="margin-top:0.5rem">
-        <div style="font-size:0.875rem;color:#555;margin-bottom:0.25rem">
-            Diversification vs ρ=0 (current ρ={f_rho:.1f})
-        </div>
-        <div style="font-size:1.1rem;font-weight:600">{benefit_label}</div>
-        </div>""",
-        unsafe_allow_html=True,
+    st.metric(
+        f"Diversification vs ρ=0 (current ρ={f_rho:.1f})",
+        benefit_label,
+        help=benefit_help,
     )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
