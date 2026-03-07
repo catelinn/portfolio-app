@@ -273,7 +273,10 @@ def build_rho_frontiers(r1, sd1, r2, sd2, rf,
                 "sd":     round(sd, 4),
                 "sharpe": round(sharpe, 4),
             })
-        result[rho] = pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+        _mvp_ret = df.loc[df["sd"].idxmin(), "ret"]
+        df["region"] = df["ret"].apply(lambda r: "efficient" if r >= _mvp_ret else "dominated")
+        result[rho] = df
 
     return result
 
