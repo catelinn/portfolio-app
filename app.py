@@ -688,6 +688,7 @@ with tab2:
 
     st.metric("Current ρ", f"{f_rho:.1f}")
 
+    st.markdown("### MVP Std. Deviation across Different Correlation")
     r1, r2, r3, r4 = st.columns(4)
     r1.metric(f"MVP Std. Dev. at ρ={f_rho:.1f}",  f"{mvp_sd_curr:.2f}%",
               help="MVP std dev at the current correlation")
