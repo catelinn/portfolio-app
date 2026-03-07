@@ -222,7 +222,7 @@ with st.sidebar:
                 unsafe_allow_html=True)
     preset_cols = st.columns(3)
     with preset_cols[0]:
-        if st.button("Baseline", use_container_width=True):
+        if st.button("Portfolio Frontier Baseline", use_container_width=True):
             apply_preset(DEFAULTS)
             st.rerun()
     with preset_cols[1]:
@@ -232,6 +232,15 @@ with st.sidebar:
     with preset_cols[2]:
         if st.button("ρ = −1", use_container_width=True):
             apply_preset({**DEFAULTS, "f_rho": -1.0})
+            st.rerun()
+    cal_preset_cols = st.columns(2)
+    with cal_preset_cols[0]:
+        if st.button("CAL Baseline (Large Stock)", use_container_width=True):
+            apply_preset({"c_rf": 3.0, "c_r_risky": 8.0, "c_sd_risky": 25.0})
+            st.rerun()
+    with cal_preset_cols[1]:
+        if st.button("CAL Baseline (Small Stock)", use_container_width=True):
+            apply_preset({"c_rf": 3.0, "c_r_risky": 15.0, "c_sd_risky": 50.0})
             st.rerun()
 
 # ── Always read params from session state ─────────────────────────────────────
