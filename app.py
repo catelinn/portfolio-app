@@ -289,8 +289,11 @@ def compute_rho():
     r2, sd2 = st.session_state.f_r2, st.session_state.f_sd2
     rho, rf = st.session_state.f_rho, st.session_state.f_rf
     short   = st.session_state.allow_short
+    ref_rhos = [-0.8, -0.4, 0.0, 0.4, 0.8]
+    rho_list = ref_rhos if any(abs(rho - r) < 1e-9 for r in ref_rhos) \
+               else sorted(ref_rhos + [round(rho, 2)])
     return dict(
-        rho_frontiers = build_rho_frontiers(r1, sd1, r2, sd2, rf, allow_short=short),
+        rho_frontiers = build_rho_frontiers(r1, sd1, r2, sd2, rf, rho_list=rho_list, allow_short=short),
         rho_mvp_df    = rho_mvp_table(r1, sd1, r2, sd2, rf, current_rho=rho, allow_short=short),
         f_r1=r1, f_sd1=sd1, f_r2=r2, f_sd2=sd2, f_rho=rho, f_rf=rf,
     )
