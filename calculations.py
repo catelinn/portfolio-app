@@ -508,6 +508,10 @@ def rho_mvp_table(r1, sd1, r2, sd2, rf,
     if rho_list is None:
         rho_list = [-0.8, -0.4, 0.0, 0.4, 0.8]
 
+    # Insert current_rho if it isn't already in the list
+    if not any(abs(r - current_rho) < 1e-9 for r in rho_list):
+        rho_list = sorted(rho_list + [current_rho])
+
     rows = []
     for rho in rho_list:
         w_star = mvp_weight(sd1, sd2, rho)
