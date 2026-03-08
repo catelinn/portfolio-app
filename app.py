@@ -1417,42 +1417,42 @@ with tab_n:
             # Correlation matrix editor
             st.markdown("#### Correlation Matrix")
             st.caption(
-                "Edit any cell — the matrix is automatically symmetrised. "
-                "Diagonal is fixed at 1.0."
+                "Set pairwise correlations below — the matrix is automatically "
+                "symmetrised. Each asset's correlation with itself is fixed at 1.0."
             )
 
             _cur_names = [
                 st.session_state.get(f"n_name_{i}", f"Asset {chr(65+i)}")
                 for i in range(_n)
             ]
-            _corr_init = {}
-            for _j in range(_n):
-                _col_data = []
-                for _i in range(_n):
-                    if _i == _j:
-                        _col_data.append(1.0)
-                    elif _i < _j:
-                        _col_data.append(
-                            float(st.session_state.get(f"n_corr_{_i}_{_j}", 0.3))
-                        )
-                    else:
-                        _col_data.append(
-                            float(st.session_state.get(f"n_corr_{_j}_{_i}", 0.3))
-                        )
-                _corr_init[_cur_names[_j]] = _col_data
 
-            _corr_df_in = pd.DataFrame(_corr_init, index=_cur_names)
-            _edited = st.data_editor(
-                _corr_df_in,
-                use_container_width=True,
-                key=f"n_corr_editor_{_n}",
-            )
+            # Build list of unique pairs (i < j)
+            _pairs = [(i, j) for i in range(_n) for j in range(i + 1, _n)]
+            _cols_per_row = 3
+            for _row_start in range(0, len(_pairs), _cols_per_row):
+                _row_pairs = _pairs[_row_start: _row_start + _cols_per_row]
+                _cols = st.columns(len(_row_pairs))
+                for _col, (_pi, _pj) in zip(_cols, _row_pairs):
+                    with _col:
+                        _key = f"n_corr_{_pi}_{_pj}"
+                        st.number_input(
+                            f"{_cur_names[_pi]} / {_cur_names[_pj]}",
+                            min_value=-1.0,
+                            max_value=1.0,
+                            value=float(st.session_state.get(_key, 0.3)),
+                            step=0.05,
+                            format="%.2f",
+                            key=_key,
+                        )
 
-            # Post-process: symmetrise, clamp, force diagonal = 1
-            _arr = _edited.values.astype(float)
-            _arr = (_arr + _arr.T) / 2.0
-            np.fill_diagonal(_arr, 1.0)
+            # Build symmetric matrix with forced diagonal = 1
+            _arr = np.eye(_n)
+            for _pi, _pj in _pairs:
+                _v = float(st.session_state.get(f"n_corr_{_pi}_{_pj}", 0.3))
+                _arr[_pi, _pj] = _v
+                _arr[_pj, _pi] = _v
             _arr = np.clip(_arr, -1.0, 1.0)
+            np.fill_diagonal(_arr, 1.0)
 
             _is_valid, _corr_errs = validate_corr_matrix(_arr)
             if not _is_valid:
@@ -1463,13 +1463,6 @@ with tab_n:
                     "ℹ️ Correlation matrix adjusted to the nearest valid "
                     "positive semi-definite matrix."
                 )
-
-            # Persist back to session state
-            for _i in range(_n):
-                for _j in range(_i + 1, _n):
-                    st.session_state[f"n_corr_{_i}_{_j}"] = round(
-                        float(_arr[_i, _j]), 3
-                    )
 
             # Live heatmap preview
             st.plotly_chart(
