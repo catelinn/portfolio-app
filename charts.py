@@ -1009,18 +1009,19 @@ def chart_frontier_summary_table(summary_df):
     return fig
 
 
-def chart_frontier_with_solver(frontier_df, result_row, constraint, mvp, allow_short=False):
+def chart_frontier_with_solver(frontier_df, result_rows, constraint, mvp, allow_short=False):
     """
     Tab 4 — Portfolio Solver chart.
 
     Full frontier drawn as a muted gray background; the active constraint
-    region is overlaid in bold colour; the solver result is marked with a
-    large gold star.
+    region is overlaid in bold colour; each solver result is marked with a
+    star (gold = efficient region, red-orange = dominated region).
 
     Parameters
     ----------
     frontier_df : pd.DataFrame  full frontier from build_frontier()
-    result_row  : pd.Series     solved portfolio row (None if infeasible)
+    result_rows : list of (pd.Series, str)  each entry is (row, label);
+                  label is e.g. "Efficient Region" or "Dominated Region"
     constraint  : str           active constraint key
     mvp         : pd.Series     Minimum Variance Portfolio row
     allow_short : bool
@@ -1075,20 +1076,6 @@ def chart_frontier_with_solver(frontier_df, result_row, constraint, mvp, allow_s
                 frontier_df[frontier_df["weight_region"] == "short_A1"],
                 "Short A1 / Long A2 (Constraint)", COLORS["amber"],
             ),
-            "efficient": (
-                frontier_df[
-                    (frontier_df["region"] == "efficient") &
-                    (frontier_df["weight_region"] == "long_only")
-                ],
-                "Efficient Frontier (Constraint)", COLORS["efficient"],
-            ),
-            "dominated": (
-                frontier_df[
-                    (frontier_df["region"] == "dominated") &
-                    (frontier_df["weight_region"] == "long_only")
-                ],
-                "Dominated Region (Constraint)", COLORS["dominated"],
-            ),
         }
         if constraint in constraint_styles:
             df_c, label_c, color_c = constraint_styles[constraint]
@@ -1114,21 +1101,28 @@ def chart_frontier_with_solver(frontier_df, result_row, constraint, mvp, allow_s
     # ── Asset endpoint markers ────────────────────────────────────────────────
     fig = _add_asset_markers(fig, frontier_df)
 
-    # ── Solver result — gold star ─────────────────────────────────────────────
-    if result_row is not None:
+    # ── Solver result stars ───────────────────────────────────────────────────
+    _star_color = {
+        "Efficient Region": "#FF8C00",   # gold
+        "Dominated Region": "#E63946",   # red-orange
+    }
+    for _rr, _rl in (result_rows or []):
+        if _rr is None:
+            continue
+        _color = _star_color.get(_rl, "#FF8C00")
         fig.add_trace(go.Scatter(
-            x=[result_row["sd"]], y=[result_row["ret"]],
+            x=[_rr["sd"]], y=[_rr["ret"]],
             mode="markers+text",
-            marker=dict(size=18, color="#FF8C00", symbol="star",
+            marker=dict(size=18, color=_color, symbol="star",
                         line=dict(width=2, color="white")),
-            text=["Solver Result"], textposition="top right",
-            textfont=dict(size=11, color="#FF8C00"),
-            name="Solver Result",
+            text=[_rl], textposition="top right",
+            textfont=dict(size=11, color=_color),
+            name=_rl,
             customdata=[[
-                "Solver Result",
-                result_row["w_A1"] * 100,
-                result_row["w_A2"] * 100,
-                result_row["sharpe"],
+                _rl,
+                _rr["w_A1"] * 100,
+                _rr["w_A2"] * 100,
+                _rr["sharpe"],
             ]],
             hovertemplate=_hover_frontier(),
             showlegend=True,
