@@ -762,8 +762,8 @@ with tab2:
         else "• Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)"
     )
     _note2 = (
-        "• 0-100% A1 (100-0% A2): Lower ρ → frontier bows further left → more diversification benefit"
-        "Reason: both w₁ and w₂ are positive, the covariance term 2w₁w₂ρσ₁σ₂ decreases with lower ρ"
+        "• 0-100% A1 | 100-0% A2: Lower ρ → frontier bows further left → more diversification benefit. "
+        "Reason: both w₁ and w₂ are positive, the covariance term (2w₁w₂ρσ₁σ₂) decreases with lower ρ"
     )
     _note3 = (
         "• Beyond 100% A2 (short A1, w₁ &lt; 0): correlation effect <b>reverses</b> — "
@@ -772,13 +772,17 @@ with tab2:
         if allow_short
         else ""
     )
-    st.markdown(
-        f"<small>{_note1}<br>"
-        f"{_note2}<br>"
+     _note4 = (
         "• Asset markers (100% A1, 0% A2) and (0% A1, 100% A2) are ρ-invariant — "
         "all frontier curves share the same endpoints — because "
         f"σₚ = √(w₁²σ₁² + w₂²σ₂² + 2w₁w₂ρσ₁σ₂); when w₁=0 → σₚ=σ₂, when w₂=0 → σₚ=σ₁<br>"
-        f"{_note3}</small>",
+    )
+    
+    st.markdown(
+        f"<small>{_note1}<br>"
+        f"{_note2}<br>"
+        f"{_note3}<br>"
+        f"{_note4}</small>",
         unsafe_allow_html=True,
     )
 
