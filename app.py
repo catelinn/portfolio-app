@@ -1051,6 +1051,7 @@ with tab4:
     st.markdown("#### 🎯 Solver Configuration")
 
     _constraint_options_lo = [
+        "All Allocations",
         "Long Only",
     ]
     _constraint_options_all = [
