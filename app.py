@@ -347,470 +347,17 @@ st.markdown(
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
 
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📊  Portfolio Frontier (Two Risky Assets)",
-    "🔗  Correlation Effect (Two Risky Assets)",
-    "📈  Capital Allocation Line (One Free Risk, One Risky)",
-    "🎯  Portfolio Solver",
+tab_cal, tab_two, tab_n = st.tabs([
+    "📈  Capital Allocation Line",
+    "📊  Two Risky Assets",
+    "🧮  N-Asset Portfolio",
 ])
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# TAB 1 — PORTFOLIO FRONTIER
+# OUTER TAB — CAPITAL ALLOCATION LINE
 # ────────────────────────────────────────────────────────────────────────────
-with tab1:
-
-    # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
-    st.markdown("<div class='param-banner'>⚙️ Parameters — Portfolio Frontier &nbsp;·&nbsp; shared with Correlation Effect</div>", unsafe_allow_html=True)
-    with st.expander("⚙️ Parameters — Portfolio Frontier  (shared with Correlation Effect)", expanded=False):
-        pc1, pc2, pc3 = st.columns(3)
-        with pc1:
-            st.markdown("**Asset 1**")
-            f_r1  = st.slider("Exp. Return (%)",  0.0, 25.0, _val("f_r1"),  0.5, key="f_r1")
-            f_sd1 = st.slider("Std. Dev. (%)",    5.0, 60.0, _val("f_sd1"), 1.0, key="f_sd1")
-        with pc2:
-            st.markdown("**Asset 2 (more volatile)**")
-            f_r2   = st.slider("Exp. Return (%) ", 0.0, 30.0, _val("f_r2"), 0.5, key="f_r2")
-            sd2_min = f_sd1 + 1.0
-            sd2_val = max(_val("f_sd2"), sd2_min)
-            if _val("f_sd2") < sd2_min:
-                st.info(f"ℹ️ Asset 2 Std. Dev. adjusted to {sd2_val:.0f}% — must exceed Asset 1 ({f_sd1:.0f}%).")
-            f_sd2  = st.slider("Std. Dev. (%)  ",  sd2_min, 80.0, sd2_val, 1.0, key="f_sd2",
-                               help="Asset 2 must always be riskier than Asset 1.")
-        with pc3:
-            st.markdown("**Correlation & Risk-Free Rate**")
-            f_rho = st.slider("Correlation (ρ)",   -1.0, 1.0,  _val("f_rho"), 0.1, key="f_rho")
-            f_rf  = st.slider("Risk-Free Rate (%)", 0.0, 10.0, _val("f_rf"),  0.5, key="f_rf",
-                              help="Used for Sharpe ratio calculation only.")
-
-    # ── Compute with latest params ──────────────────────────────────────────
-    _f = compute_frontier()
-    frontier_df   = _f["frontier_df"]
-    mvp           = _f["mvp"]
-    max_sr        = _f["max_sr"]
-    max_ret_lo    = _f["max_ret_lo"]
-    max_ret_lev   = _f["max_ret_lev"]
-    eff_summary   = _f["eff_summary"]
-    benchmarks    = _f["benchmarks"]
-    f_summary_tbl = _f["f_summary_tbl"]
-    f_r1, f_sd1   = _f["f_r1"], _f["f_sd1"]
-    f_r2, f_sd2   = _f["f_r2"], _f["f_sd2"]
-    f_rho, f_rf   = _f["f_rho"], _f["f_rf"]
-
-    # ── Short-selling message ────────────────────────────────────────────────
-    if not allow_short:
-        st.markdown(
-            "<div class='info-box'>"
-            "ℹ️ <b>Short-selling is currently disabled.</b> "
-            "Only portfolios with Asset 1 Weight: 0%→100% and Asset 2 Weight: 0%→100% are shown. "
-            "This reflects the real-world constraint most investors face in 401k plans and "
-            "standard brokerage accounts. Enable short-selling in the sidebar to see the full "
-            "frontier including short-selling and leveraged allocations."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            "<div class='warn-box'>"
-            "⚠️ <b>Short-selling is enabled.</b> "
-            "Charts now show all allocations including: "
-            "Short Asset 1 / Long Asset 2 (Asset 1 Weight &lt; 0%) and "
-            "Long Asset 1 / Short Asset 2 (Asset 1 Weight &gt; 100%). "
-            "Note: Short-selling requires a margin account and involves borrowing costs "
-            "not reflected here (per Prof. Weisbenner, Lesson 1-2.5)."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-    # ── METRICS ROW 1 — Benchmark portfolios ────────────────────────────────
-    st.markdown("#### Benchmark Portfolios")
-
-    def benchmark_card(title, ret, sd, sharpe, border_color="#2E75B6"):
-        """Render a benchmark portfolio as a compact HTML card."""
-        return (
-            f'<div style="background:#F8FBFF;border:1px solid #BDD7EE;'
-            f'border-top:4px solid {border_color};border-radius:8px;'
-            f'padding:14px 18px;flex:1;">'
-            f'<div style="font-weight:700;font-size:0.92rem;color:#1F4E79;'
-            f'margin-bottom:12px;">{title}</div>'
-            f'<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">'
-            f'<tr>'
-            f'<td style="color:#595959;padding:3px 0;">Exp. Return</td>'
-            f'<td style="text-align:right;font-weight:700;font-family:monospace;color:#1F4E79;">{ret:.2f}%</td>'
-            f'</tr>'
-            f'<tr>'
-            f'<td style="color:#595959;padding:3px 0;">Std. Dev.</td>'
-            f'<td style="text-align:right;font-weight:700;font-family:monospace;color:#1F4E79;">{sd:.2f}%</td>'
-            f'</tr>'
-            f'<tr>'
-            f'<td style="color:#595959;padding:3px 0;">Sharpe Ratio</td>'
-            f'<td style="text-align:right;font-weight:700;font-family:monospace;color:#1F4E79;">{sharpe:.3f}</td>'
-            f'</tr>'
-            f'</table>'
-            f'</div>'
-        )
-
-    c1 = benchmark_card("100% Asset 1",
-                        benchmarks['asset1']['ret'],
-                        benchmarks['asset1']['sd'],
-                        benchmarks['asset1']['sharpe'],
-                        border_color="#1F4E79")
-    c2 = benchmark_card("100% Asset 2 (more risky)",
-                        benchmarks['asset2']['ret'],
-                        benchmarks['asset2']['sd'],
-                        benchmarks['asset2']['sharpe'],
-                        border_color="#E8A020")
-    c3 = benchmark_card("Equal Weight (50/50)",
-                        benchmarks['equal']['ret'],
-                        benchmarks['equal']['sd'],
-                        benchmarks['equal']['sharpe'],
-                        border_color="#1E6B3A")
-
-    st.markdown(
-        f'<div style="display:flex;gap:16px;margin-bottom:8px;">{c1}{c2}{c3}</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── METRICS ROW 2 — Optimal portfolio cards ──────────────────────────────
-    st.markdown("#### Optimal Portfolios")
-
-    def opt_card(title, row, extra_note=""):
-        """Render a styled optimal portfolio card."""
-        note_html = (f"<div style='margin-top:6px;font-size:0.78rem;color:#595959'>{extra_note}</div>"
-                     if extra_note else "")
-        html = (
-            f"<div class='opt-card'>"
-            f"<div class='opt-card-title'>{title}</div>"
-            f"<div class='opt-card-row'><span>Asset 1 Weight</span><span class='opt-card-value'>{row['w_A1']*100:.1f}%</span></div>"
-            f"<div class='opt-card-row'><span>Asset 2 Weight</span><span class='opt-card-value'>{row['w_A2']*100:.1f}%</span></div>"
-            f"<div class='opt-card-row'><span>Exp. Return</span><span class='opt-card-value'>{row['ret']:.2f}%</span></div>"
-            f"<div class='opt-card-row'><span>Std. Dev.</span><span class='opt-card-value'>{row['sd']:.2f}%</span></div>"
-            f"<div class='opt-card-row'><span>Sharpe Ratio</span><span class='opt-card-value'>{row['sharpe']:.3f}</span></div>"
-            f"{note_html}"
-            f"</div>"
-        )
-        st.markdown(html, unsafe_allow_html=True)
-
-    n_cards = 4 if allow_short else 3
-    card_cols = st.columns(n_cards)
-
-    with card_cols[0]:
-        opt_card("⭐ Min. Variance Portfolio", mvp,
-                 "Lowest achievable Std. Dev.")
-    with card_cols[1]:
-        opt_card("⭐ Max. Sharpe Portfolio", max_sr,
-                 "Highest risk-adjusted return (long-only)")
-    with card_cols[2]:
-        opt_card("⭐ Max. Return (Long Only)", max_ret_lo,
-                 "Asset 2 Weight = 100%")
-    if allow_short:
-        with card_cols[3]:
-            opt_card("⭐ Max. Return (Leveraged)", max_ret_lev,
-                     "Asset 2 Weight = 200% — requires short-selling")
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── METRICS ROW 3 — Efficient frontier region ────────────────────────────
-    st.markdown("#### 📊 Efficient Frontier Region")
-    st.caption(
-        "Long-only portfolios above the Min. Variance Portfolio "
-        "(Asset 1 Weight: 0%→100%, Exp. Return ≥ MVP Exp. Return) — "
-        "consistent with Prof. Weisbenner's Lesson 1-5."
-    )
-
-    if eff_summary:
-        # Derive all values from eff_summary rows — fully data-driven
-        mvp_row  = eff_summary['mvp_row']
-        hi_row   = eff_summary['hi_ret_row']
-
-        mvp_w_a1  = mvp_row["w_A1"] * 100
-        mvp_w_a2  = mvp_row["w_A2"] * 100
-        mvp_sd    = mvp_row["sd"]
-        mvp_ret   = mvp_row["ret"]
-
-        hi_w_a1   = hi_row["w_A1"] * 100
-        hi_w_a2   = hi_row["w_A2"] * 100
-        hi_sd     = hi_row["sd"]
-        hi_ret    = hi_row["ret"]
-
-        endpoint  = f"{hi_w_a1:.0f}% A1 / {hi_w_a2:.0f}% A2"
-        w_a1_dir  = "increases" if hi_w_a1 > mvp_w_a1 else "decreases"
-        w_a2_dir  = "increases" if hi_w_a2 > mvp_w_a2 else "decreases"
-        sd_dir    = "increases" if hi_sd > mvp_sd else "decreases"
-
-        pk_a1     = eff_summary['peak_w_A1'] * 100
-        pk_a2     = eff_summary['peak_w_A2'] * 100
-
-        # Row 1: weight ranges + peak sharpe
-        e1, e2, e3 = st.columns(3)
-        e1.metric(
-            "Asset 1 Weight Range",
-            f"{mvp_w_a1:.0f}%",
-            f"→ {hi_w_a1:.0f}%",
-            help=(f"Asset 1 weight at MVP = {mvp_w_a1:.0f}%, "
-                  f"{w_a1_dir} to {hi_w_a1:.0f}% at the high-return endpoint ({endpoint})"),
-        )
-        e2.metric(
-            "Asset 2 Weight Range",
-            f"{mvp_w_a2:.0f}%",
-            f"→ {hi_w_a2:.0f}%",
-            help=(f"Asset 2 weight at MVP = {mvp_w_a2:.0f}%, "
-                  f"{w_a2_dir} to {hi_w_a2:.0f}% at the high-return endpoint ({endpoint})"),
-        )
-        e3.metric(
-            "Peak Sharpe Ratio",
-            f"{eff_summary['peak_sharpe']:.3f}",
-            help=(f"Highest Sharpe ratio in the efficient frontier region — "
-                  f"at Asset 1 Weight = {pk_a1:.0f}%, Asset 2 Weight = {pk_a2:.0f}%"),
-        )
-
-        # Row 2: std dev range + return range + portfolio count
-        e4, e5, e6 = st.columns(3)
-        e4.metric(
-            "Std. Dev. Range",
-            f"{eff_summary['sd_range'][0]:.2f}%",
-            f"→ {eff_summary['sd_range'][1]:.2f}%",
-            help=(f"Std. Dev. at MVP = {mvp_sd:.2f}%, "
-                  f"{sd_dir} to {hi_sd:.2f}% at the high-return endpoint ({endpoint})"),
-        )
-        e5.metric(
-            "Exp. Return Range",
-            f"{eff_summary['ret_range'][0]:.2f}%",
-            f"→ {eff_summary['ret_range'][1]:.2f}%",
-            help=(f"Exp. Return at MVP = {mvp_ret:.2f}%, "
-                  f"increases to {hi_ret:.2f}% at the high-return endpoint ({endpoint})"),
-        )
-        e6.metric(
-            "Portfolios in Region",
-            f"{eff_summary['n_portfolios']}",
-            help=(f"Number of portfolios with Exp. Return ≥ MVP return ({mvp_ret:.2f}%) — "
-                  f"Asset 1 weight from {mvp_w_a1:.0f}% (MVP) to {hi_w_a1:.0f}% ({endpoint})"),
-        )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── CHARTS ───────────────────────────────────────────────────────────────
-    st.markdown("#### Charts")
-
-    if allow_short:
-        # 2x2 grid — all 4 charts
-        row1_c1, row1_c2 = st.columns(2)
-        with row1_c1:
-            st.plotly_chart(
-                chart_frontier_all(frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp, max_sr, max_ret_lo, max_ret_lev, allow_short=allow_short),
-                use_container_width=True, key="f_all"
-            )
-        with row1_c2:
-            st.plotly_chart(
-                chart_frontier_long_only(
-                    frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp, max_sr, max_ret_lo),
-                use_container_width=True, key="f_effdom"
-            )
-        row2_c1, row2_c2 = st.columns(2)
-        with row2_c1:
-            st.plotly_chart(
-                chart_frontier_short_A1(frontier_df, f_r1, f_sd1, f_r2, f_sd2, max_sr, max_ret_lo, max_ret_lev, allow_short=allow_short),
-                use_container_width=True, key="f_shortA1"
-            )
-        with row2_c2:
-            st.plotly_chart(
-                chart_frontier_long_A1(frontier_df, f_r1, f_sd1, f_r2, f_sd2, max_sr, max_ret_lo, max_ret_lev, allow_short=allow_short),
-                use_container_width=True, key="f_longA1"
-            )
-    else:
-        # Single chart — efficient vs dominated only
-        st.plotly_chart(
-            chart_frontier_long_only(
-                frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp, max_sr, max_ret_lo),
-            use_container_width=True, key="f_effdom_only"
-        )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── SUMMARY TABLE ─────────────────────────────────────────────────────────
-    st.markdown("#### Portfolio Summary Table")
-    st.plotly_chart(
-        chart_frontier_summary_table(f_summary_tbl),
-        use_container_width=True, key="f_summary_tbl"
-    )
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 2 — CORRELATION EFFECT
-# ────────────────────────────────────────────────────────────────────────────
-with tab2:
-
-    # ── Sync rho_f_* slider keys from canonical keys (so Tab 1 changes reflect here) ──
-    for _src, _dst in [("f_r1","rho_f_r1"), ("f_sd1","rho_f_sd1"), ("f_r2","rho_f_r2"),
-                       ("f_sd2","rho_f_sd2"), ("f_rho","rho_f_rho"), ("f_rf","rho_f_rf")]:
-        st.session_state[_dst] = st.session_state[_src]
-
-    # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
-    st.markdown("<div class='param-banner'>⚙️ Parameters — Correlation Effect &nbsp;·&nbsp; shared with Portfolio Frontier</div>", unsafe_allow_html=True)
-    with st.expander("⚙️ Parameters — Correlation Effect  (shared with Portfolio Frontier)", expanded=False):
-        rc1, rc2, rc3 = st.columns(3)
-        with rc1:
-            st.markdown("**Asset 1**")
-            f_r1  = st.slider("Exp. Return (%)",  0.0, 25.0, st.session_state.f_r1,  0.5, key="rho_f_r1",  on_change=lambda: st.session_state.update(f_r1=st.session_state.rho_f_r1))
-            f_sd1 = st.slider("Std. Dev. (%)",    5.0, 60.0, st.session_state.f_sd1, 1.0, key="rho_f_sd1", on_change=lambda: st.session_state.update(f_sd1=st.session_state.rho_f_sd1))
-        with rc2:
-            st.markdown("**Asset 2 (more volatile)**")
-            f_r2  = st.slider("Exp. Return (%) ", 0.0, 30.0, _val("f_r2"),  0.5, key="rho_f_r2",  on_change=lambda: st.session_state.update(f_r2=st.session_state.rho_f_r2))
-            f_sd2 = st.slider("Std. Dev. (%)  ",  _val("f_sd1")+1, 80.0, _val("f_sd2"), 1.0, key="rho_f_sd2", on_change=lambda: st.session_state.update(f_sd2=st.session_state.rho_f_sd2))
-        with rc3:
-            st.markdown("**Correlation & Risk-Free Rate**")
-            f_rho = st.slider("Correlation (ρ)",   -1.0, 1.0,  st.session_state.f_rho, 0.1, key="rho_f_rho", on_change=lambda: st.session_state.update(f_rho=st.session_state.rho_f_rho))
-            f_rf  = st.slider("Risk-Free Rate (%)", 0.0, 10.0, st.session_state.f_rf,  0.5, key="rho_f_rf",  on_change=lambda: st.session_state.update(f_rf=st.session_state.rho_f_rf))
-
-    # ── Compute with latest params ──────────────────────────────────────────
-    _r = compute_rho()
-    rho_frontiers = _r["rho_frontiers"]
-    rho_mvp_df    = _r["rho_mvp_df"]
-    rho_msp_df    = _r["rho_msp_df"]
-    mvp_points    = _r["mvp_points"]
-    msp_points    = _r["msp_points"]
-    f_r1, f_sd1   = _r["f_r1"], _r["f_sd1"]
-    f_r2, f_sd2   = _r["f_r2"], _r["f_sd2"]
-    f_rho, f_rf   = _r["f_rho"], _r["f_rf"]
-
-    if not allow_short:
-        st.markdown(
-            "<div class='info-box'>"
-            "ℹ️ Correlation frontiers are displayed as long-only "
-            "(Asset 1 & Asset 2 Weights: 0% → 100%). "
-            "Enable short-selling in the sidebar to see how unconstrained MVP weights change across correlations."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            "<div class='warn-box'>"
-            "⚠️ <b>Short-selling is enabled.</b> "
-            "Frontiers now extend to Asset 1 Weight: −100% → +200% | Asset 2 Weight: 200% → -100%, revealing the full diversification curve. "
-            "MVP weights are unconstrained — they may fall outside [0%, 100%]"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-    # ── METRICS ──────────────────────────────────────────────────────────────
-    st.markdown("#### Current ρ (Correlation)")
-
-    mvp_sd_neg1 = rho_mvp_sd(f_sd1, f_sd2, -1.0, allow_short=allow_short)
-    mvp_sd_zero = rho_mvp_sd(f_sd1, f_sd2,  0.0, allow_short=allow_short)
-    mvp_sd_pos1 = rho_mvp_sd(f_sd1, f_sd2,  1.0, allow_short=allow_short)
-    mvp_sd_curr = rho_mvp_sd(f_sd1, f_sd2,  f_rho, allow_short=allow_short)
-
-    st.metric("Current ρ", f"{f_rho:.1f}")
-
-    st.markdown("### MVP Std. Deviation across Different Correlation")
-    r1, r2, r3, r4 = st.columns(4)
-    r1.metric(f"MVP Std. Dev. at ρ={f_rho:.1f}",  f"{mvp_sd_curr:.2f}%",
-              help="MVP std dev at the current correlation")
-    r2.metric("MVP Std. Dev. at ρ=−1",  f"{mvp_sd_neg1:.2f}%",
-              help="Lowest achievable risk — perfect negative correlation")
-    r3.metric("MVP Std. Dev. at ρ=0",   f"{mvp_sd_zero:.2f}%",
-              help="Risk at zero correlation")
-    r4.metric("MVP Std. Dev. at ρ=+1",  f"{mvp_sd_pos1:.2f}%",
-              help="No diversification benefit — assets move in lockstep")
-
-    # Diversification vs ρ=0 — derived purely from computed MVP std devs, no assumptions
-    benefit = mvp_sd_zero - mvp_sd_curr  # positive = current is better than ρ=0
-    abs_diff = abs(benefit)
-    if abs_diff < 0.005:
-        benefit_label = f"σ unchanged vs ρ=0  (both {mvp_sd_curr:.2f}%)"
-        benefit_help  = "Current ρ produces the same MVP std dev as ρ=0 given these asset parameters."
-    elif benefit > 0:
-        benefit_label = f"σ reduced by {abs_diff:.2f}%  ✅ (MVP σ: {mvp_sd_curr:.2f}% vs {mvp_sd_zero:.2f}% at ρ=0)"
-        benefit_help  = f"At ρ={f_rho:.1f}, MVP std dev is {mvp_sd_curr:.2f}% — lower than {mvp_sd_zero:.2f}% at ρ=0. Current correlation improves diversification."
-    else:
-        benefit_label = f"⚠️ MVP σ increased by {abs_diff:.2f}% at current ρ"
-        benefit_help  = f"At ρ={f_rho:.1f}, MVP std dev is {mvp_sd_curr:.2f}% — higher than {mvp_sd_zero:.2f}% at ρ=0. Current correlation reduces diversification benefit."
-    st.metric(
-        f"Diversification vs ρ=0 (current ρ={f_rho:.1f})",
-        benefit_label,
-        help=benefit_help,
-    )
-
-    # ── MSP metrics at current ρ ──────────────────────────────────────────────
-    st.markdown("#### Max Sharpe Ratio Portfolio at Current ρ")
-    _msp_curr = next(
-        (v for k, v in msp_points.items() if abs(k - f_rho) < 1e-9),
-        list(msp_points.values())[-1]
-    )
-    _mc1, _mc2, _mc3, _mc4 = st.columns(4)
-    _mc1.metric(f"MSP Asset 1 Weight at ρ={f_rho:.1f}",
-                f"{_msp_curr['w_A1'] * 100:.1f}%",
-                help="Weight in Asset 1 for the Max Sharpe Portfolio at the current correlation")
-    _mc2.metric(f"MSP Std. Dev. at ρ={f_rho:.1f}",
-                f"{_msp_curr['sd']:.2f}%",
-                help="Portfolio std dev of the Max Sharpe Portfolio at the current correlation")
-    _mc3.metric(f"MSP Exp. Return at ρ={f_rho:.1f}",
-                f"{_msp_curr['ret']:.2f}%",
-                help="Expected return of the Max Sharpe Portfolio at the current correlation")
-    _mc4.metric(f"MSP Sharpe Ratio at ρ={f_rho:.1f}",
-                f"{_msp_curr['sharpe']:.3f}",
-                help="Sharpe ratio of the Max Sharpe Portfolio at the current correlation")
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── CHARTS ───────────────────────────────────────────────────────────────
-    st.markdown("#### Effect of Correlation on the Efficient Frontier")
-    st.plotly_chart(
-        chart_rho_effect(rho_frontiers, f_rho, f_r1, f_sd1, f_r2, f_sd2,
-                         mvp_points=mvp_points, msp_points=msp_points,
-                         allow_short=allow_short),
-        use_container_width=True, key="rho_chart"
-    )
-    _note1 = (
-        "• Full frontier: Asset 1 Weight −100% → +200% (short-selling enabled — MVP weights unconstrained)"
-        if allow_short
-        else "• Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)"
-    )
-    _note2 = (
-        "• Asset markers (100% A1, 0% A2) and (0% A1, 100% A2) are ρ-invariant — "
-        "all frontier curves share the same endpoints — because "
-        f"σₚ = √(w₁²σ₁² + w₂²σ₂² + 2w₁w₂ρσ₁σ₂); when w₁=0 → σₚ=σ₂, when w₂=0 → σₚ=σ₁"
-    )
-    _note3 = (
-        "• 0-100% A1 \| 100-0% A2: Lower ρ → frontier bows further left → more diversification benefit. "
-        "Reason: both w₁ and w₂ are positive, the covariance term (2w₁w₂ρσ₁σ₂) decreases with lower ρ"
-    )
-    _note4 = (
-        "• Beyond 100% A2 (short A1, w₁ &lt; 0): correlation effect <b>reverses</b> — "
-        "higher ρ reduces variance here, lower ρ increases it. "
-        "Reason: w₁ &lt; 0 flips the sign of the covariance term (2w₁w₂ρσ₁σ₂)."
-        if allow_short
-        else ""
-    )
-    
-    st.markdown(
-        f"<small>{_note1}<br>"
-        f"{_note2}<br>"
-        f"{_note3}<br>"
-        f"{_note4}</small>",
-        unsafe_allow_html=True,
-    )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    st.markdown("#### MVP Std. Dev. Comparison Across Correlation")
-    st.plotly_chart(
-        chart_rho_mvp_table(rho_mvp_df),
-        use_container_width=True, key="rho_mvp_tbl"
-    )
-
-    st.markdown("#### Max Sharpe Ratio Portfolio Comparison Across Correlation")
-    st.plotly_chart(
-        chart_rho_msp_table(rho_msp_df),
-        use_container_width=True, key="rho_msp_tbl"
-    )
-
-
-# TAB 3 — CAPITAL ALLOCATION LINE
-# ────────────────────────────────────────────────────────────────────────────
-with tab3:
+with tab_cal:
 
     # ── PARAMETER EXPANDER ───────────────────────────────────────────────────
     st.markdown("<div class='param-banner'>⚙️ Parameters — Capital Allocation Line</div>", unsafe_allow_html=True)
@@ -826,21 +373,7 @@ with tab3:
                              help="T-Bill rate — zero std. dev. by definition.")
             st.caption("📌 Zero std. dev., zero correlation with risky asset.")
 
-    # ── Compute with latest params ──────────────────────────────────────────
-    _f = compute_frontier()
-    frontier_df   = _f["frontier_df"]
-    mvp           = _f["mvp"]
-    max_sr        = _f["max_sr"]
-    max_ret_lo    = _f["max_ret_lo"]
-    max_ret_lev   = _f["max_ret_lev"]
-    eff_summary   = _f["eff_summary"]
-    benchmarks    = _f["benchmarks"]
-    f_summary_tbl = _f["f_summary_tbl"]
-    f_r1, f_sd1   = _f["f_r1"], _f["f_sd1"]
-    f_r2, f_sd2   = _f["f_r2"], _f["f_sd2"]
-    f_rho, f_rf   = _f["f_rho"], _f["f_rf"]
-
-    # ── Compute with latest params ──────────────────────────────────────────
+    # ── Compute ──────────────────────────────────────────────────────────────
     _c = compute_cal()
     cal_df        = _c["cal_df"]
     c_summary_tbl = _c["c_summary_tbl"]
@@ -878,18 +411,15 @@ with tab3:
         "Short-selling region (w < 0) is visible in the 'All Allocations' chart but excluded from the metric cards."
     )
 
-    # Row 1 — Sharpe, risk-free rate
     m1, m2 = st.columns(2)
     m1.metric("Sharpe Ratio", f"{cal_sharpe:.3f}",
               help="Slope of the CAL — reward per unit of risk taken")
     m2.metric("Risk-Free Rate", f"{c_rf:.2f}%",
               help="Intercept of the CAL — Exp. Return when 100% in T-Bills, σ = 0%")
 
-    # Row 1b — CAL Equation full width
     st.metric("CAL Equation",
               f"E[R] = {c_rf:.1f}% + {cal_sharpe:.3f} × σ")
 
-    # Row 2 — Key portfolio points on the CAL (HTML cards — no delta arrows)
     def cal_point_card(title, ret, sd, border_color="#2E75B6"):
         return (
             f'<div style="background:#F2F7FC;border:1px solid #BDD7EE;'
@@ -922,19 +452,16 @@ with tab3:
     st.markdown("#### Charts")
 
     if allow_short:
-        # Chart 1: All Allocations (short-selling ON only)
         st.plotly_chart(
             chart_cal_all(cal_df, c_r_risky, c_sd_risky, c_rf),
             use_container_width=True, key="c_all"
         )
 
-    # Chart 2: All Long (always visible)
     st.plotly_chart(
         chart_cal_all_long(cal_df, c_r_risky, c_sd_risky, c_rf),
         use_container_width=True, key="c_all_long"
     )
 
-    # Charts 3 & 4 side by side
     c_col1, c_col2 = st.columns(2)
     with c_col1:
         st.plotly_chart(
@@ -947,7 +474,6 @@ with tab3:
             use_container_width=True, key="c_lev"
         )
 
-    # Chart 5: Equation summary
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
     st.markdown("#### CAL Equation Summary")
 
@@ -1007,8 +533,6 @@ with tab3:
         """, unsafe_allow_html=True)
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── SUMMARY TABLE ─────────────────────────────────────────────────────────
     st.markdown("#### CAL Summary Table")
     st.plotly_chart(
         chart_cal_summary_table(c_summary_tbl),
@@ -1016,225 +540,632 @@ with tab3:
     )
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 4 — PORTFOLIO SOLVER
-# ────────────────────────────────────────────────────────────────────────────
-with tab4:
 
-    # ── PARAMETER EXPANDER (read-only — shared from Portfolio Frontier) ───────
-    st.markdown("<div class='param-banner'>⚙️ Parameters — Portfolio Solver &nbsp;·&nbsp; shared with Portfolio Frontier</div>", unsafe_allow_html=True)
-    with st.expander("📌 Current Asset Parameters (shared with Portfolio Frontier)", expanded=False):
-        _f4 = compute_frontier()
-        _p1, _p2, _p3 = st.columns(3)
-        with _p1:
+# ────────────────────────────────────────────────────────────────────────────
+# OUTER TAB — TWO RISKY ASSETS
+# ────────────────────────────────────────────────────────────────────────────
+with tab_two:
+
+    # ── SHARED PARAMETER EXPANDER ─────────────────────────────────────────────
+    st.markdown("<div class='param-banner'>⚙️ Parameters — Two Risky Assets &nbsp;·&nbsp; shared across all sub-tabs</div>", unsafe_allow_html=True)
+    with st.expander("⚙️ Parameters — Two Risky Assets", expanded=False):
+        pc1, pc2, pc3 = st.columns(3)
+        with pc1:
             st.markdown("**Asset 1**")
-            st.write(f"Exp. Return: **{_f4['f_r1']:.1f}%**")
-            st.write(f"Std. Dev.: **{_f4['f_sd1']:.1f}%**")
-        with _p2:
-            st.markdown("**Asset 2**")
-            st.write(f"Exp. Return: **{_f4['f_r2']:.1f}%**")
-            st.write(f"Std. Dev.: **{_f4['f_sd2']:.1f}%**")
-        with _p3:
-            st.markdown("**Correlation & Risk-Free**")
-            st.write(f"ρ: **{_f4['f_rho']:.2f}**")
-            st.write(f"Risk-Free Rate: **{_f4['f_rf']:.1f}%**")
-        st.caption("Edit these in Tab 1 — Portfolio Frontier.")
+            f_r1  = st.slider("Exp. Return (%)",  0.0, 25.0, _val("f_r1"),  0.5, key="f_r1")
+            f_sd1 = st.slider("Std. Dev. (%)",    5.0, 60.0, _val("f_sd1"), 1.0, key="f_sd1")
+        with pc2:
+            st.markdown("**Asset 2 (more volatile)**")
+            f_r2    = st.slider("Exp. Return (%) ", 0.0, 30.0, _val("f_r2"), 0.5, key="f_r2")
+            sd2_min = f_sd1 + 1.0
+            sd2_val = max(_val("f_sd2"), sd2_min)
+            if _val("f_sd2") < sd2_min:
+                st.info(f"ℹ️ Asset 2 Std. Dev. adjusted to {sd2_val:.0f}% — must exceed Asset 1 ({f_sd1:.0f}%).")
+            f_sd2 = st.slider("Std. Dev. (%)  ", sd2_min, 80.0, sd2_val, 1.0, key="f_sd2",
+                              help="Asset 2 must always be riskier than Asset 1.")
+        with pc3:
+            st.markdown("**Correlation & Risk-Free Rate**")
+            f_rho = st.slider("Correlation (ρ)",   -1.0, 1.0,  _val("f_rho"), 0.1, key="f_rho")
+            f_rf  = st.slider("Risk-Free Rate (%)", 0.0, 10.0, _val("f_rf"),  0.5, key="f_rf",
+                              help="Used for Sharpe ratio calculation only.")
 
-    # ── Compute frontier (reuse shared state) ─────────────────────────────────
-    _f4          = compute_frontier()
-    frontier_df4 = _f4["frontier_df"]
-    mvp4         = _f4["mvp"]
+    # ── Compute frontier once (shared by all sub-tabs) ────────────────────────
+    _f = compute_frontier()
+    frontier_df   = _f["frontier_df"]
+    mvp           = _f["mvp"]
+    max_sr        = _f["max_sr"]
+    max_ret_lo    = _f["max_ret_lo"]
+    max_ret_lev   = _f["max_ret_lev"]
+    eff_summary   = _f["eff_summary"]
+    benchmarks    = _f["benchmarks"]
+    f_summary_tbl = _f["f_summary_tbl"]
+    f_r1, f_sd1   = _f["f_r1"], _f["f_sd1"]
+    f_r2, f_sd2   = _f["f_r2"], _f["f_sd2"]
+    f_rho, f_rf   = _f["f_rho"], _f["f_rf"]
 
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+    # ── INNER SUB-TABS ────────────────────────────────────────────────────────
+    sub_frontier, sub_rho, sub_solver = st.tabs([
+        "📊  Portfolio Frontier",
+        "🔗  Correlation Effect",
+        "🎯  Portfolio Solver",
+    ])
 
-    # ── SOLVER CONFIGURATION ─────────────────────────────────────────────────
-    st.markdown("#### 🎯 Solver Configuration")
+    # ── INNER SUB-TAB 1: Portfolio Frontier ──────────────────────────────────
+    with sub_frontier:
 
-    _constraint_options_lo = [
-        "All Allocations",
-        "Long Only",
-    ]
-    _constraint_options_all = [
-        "All Allocations",
-        "Long Only",
-        "Long Asset 1 / Short Asset 2",
-        "Short Asset 1 / Long Asset 2",
-    ]
-    _constraint_options = _constraint_options_all if allow_short else _constraint_options_lo
-
-    if st.session_state.sol_constraint not in _constraint_options:
-        st.session_state.sol_constraint = _constraint_options[0]
-
-    _constraint_key_map = {
-        "All Allocations":               "full",
-        "Long Only":                     "long_only",
-        "Long Asset 1 / Short Asset 2":  "long_A1",
-        "Short Asset 1 / Long Asset 2":  "short_A1",
-    }
-    _objective_key_map = {
-        "Expected Return": "ret",
-        "Std. Dev.":       "sd",
-        "Sharpe Ratio":    "sharpe",
-    }
-    _goal_key_map = {
-        "Minimize":         "min",
-        "Maximize":         "max",
-        "Hit Target Value": "target",
-    }
-
-    sc1, sc2, sc3 = st.columns(3)
-    with sc1:
-        sol_objective = st.radio(
-            "Objective Metric",
-            ["Expected Return", "Std. Dev.", "Sharpe Ratio"],
-            index=["Expected Return", "Std. Dev.", "Sharpe Ratio"].index(
-                st.session_state.sol_objective
-            ),
-            key="sol_objective",
-            help="Which portfolio metric to optimise or target.",
-        )
-    with sc2:
-        sol_goal = st.radio(
-            "Goal",
-            ["Minimize", "Maximize", "Hit Target Value"],
-            index=["Minimize", "Maximize", "Hit Target Value"].index(
-                st.session_state.sol_goal
-            ),
-            key="sol_goal",
-            help="Find the minimum, maximum, or the allocation closest to a specific value.",
-        )
-    with sc3:
-        sol_constraint = st.selectbox(
-            "Constraint Region",
-            _constraint_options,
-            index=_constraint_options.index(st.session_state.sol_constraint),
-            key="sol_constraint",
-            help="Restrict the search to this region of the frontier.",
-        )
-
-    _result_display_opts = ["Both", "Efficient Region Only", "Dominated Only"]
-    sol_result_display = st.radio(
-        "Result Display",
-        _result_display_opts,
-        index=_result_display_opts.index(st.session_state.sol_result_display),
-        horizontal=True,
-        key="sol_result_display",
-        help="Show results from the efficient region, dominated region, or both.",
-    )
-
-    # Target value input — only shown for Hit Target Value
-    sol_target = None
-    if sol_goal == "Hit Target Value":
-        _obj_col = _objective_key_map[sol_objective]
-        _ckey    = _constraint_key_map[sol_constraint]
-        _df_tmp  = frontier_df4.copy()
-        if _ckey == "long_only":
-            _df_tmp = _df_tmp[_df_tmp["weight_region"] == "long_only"]
-        elif _ckey == "long_A1":
-            _df_tmp = _df_tmp[_df_tmp["weight_region"] == "long_A1"]
-        elif _ckey == "short_A1":
-            _df_tmp = _df_tmp[_df_tmp["weight_region"] == "short_A1"]
-        if sol_result_display == "Efficient Region Only":
-            _df_tmp = _df_tmp[_df_tmp["region"] == "efficient"]
-        elif sol_result_display == "Dominated Only":
-            _df_tmp = _df_tmp[_df_tmp["region"] == "dominated"]
-
-        if not _df_tmp.empty:
-            _v_min     = float(_df_tmp[_obj_col].min())
-            _v_max     = float(_df_tmp[_obj_col].max())
-            _v_default = max(_v_min, min(_v_max, float(st.session_state.sol_target)))
+        if not allow_short:
+            st.markdown(
+                "<div class='info-box'>"
+                "ℹ️ <b>Short-selling is currently disabled.</b> "
+                "Only portfolios with Asset 1 Weight: 0%→100% and Asset 2 Weight: 0%→100% are shown. "
+                "This reflects the real-world constraint most investors face in 401k plans and "
+                "standard brokerage accounts. Enable short-selling in the sidebar to see the full "
+                "frontier including short-selling and leveraged allocations."
+                "</div>",
+                unsafe_allow_html=True,
+            )
         else:
-            _v_min, _v_max, _v_default = 0.0, 30.0, 10.0
+            st.markdown(
+                "<div class='warn-box'>"
+                "⚠️ <b>Short-selling is enabled.</b> "
+                "Charts now show all allocations including: "
+                "Short Asset 1 / Long Asset 2 (Asset 1 Weight &lt; 0%) and "
+                "Long Asset 1 / Short Asset 2 (Asset 1 Weight &gt; 100%). "
+                "Note: Short-selling requires a margin account and involves borrowing costs "
+                "not reflected here (per Prof. Weisbenner, Lesson 1-2.5)."
+                "</div>",
+                unsafe_allow_html=True,
+            )
 
-        _unit = "%" if sol_objective in ("Expected Return", "Std. Dev.") else ""
-        sol_target = st.number_input(
-            f"Target {sol_objective}{' (%)' if _unit else ''}",
-            min_value=round(_v_min - abs(_v_min) * 0.5, 2),
-            max_value=round(_v_max + abs(_v_max) * 0.5, 2),
-            value=round(_v_default, 2),
-            step=0.01,
-            format="%.2f",
-            key="sol_target",
-            help=(f"Feasible range in current constraint region: "
-                  f"{_v_min:.2f}{_unit} → {_v_max:.2f}{_unit}"),
+        # ── METRICS ROW 1 — Benchmark portfolios ─────────────────────────────
+        st.markdown("#### Benchmark Portfolios")
+
+        def benchmark_card(title, ret, sd, sharpe, border_color="#2E75B6"):
+            """Render a benchmark portfolio as a compact HTML card."""
+            return (
+                f'<div style="background:#F8FBFF;border:1px solid #BDD7EE;'
+                f'border-top:4px solid {border_color};border-radius:8px;'
+                f'padding:14px 18px;flex:1;">'
+                f'<div style="font-weight:700;font-size:0.92rem;color:#1F4E79;'
+                f'margin-bottom:12px;">{title}</div>'
+                f'<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">'
+                f'<tr>'
+                f'<td style="color:#595959;padding:3px 0;">Exp. Return</td>'
+                f'<td style="text-align:right;font-weight:700;font-family:monospace;color:#1F4E79;">{ret:.2f}%</td>'
+                f'</tr>'
+                f'<tr>'
+                f'<td style="color:#595959;padding:3px 0;">Std. Dev.</td>'
+                f'<td style="text-align:right;font-weight:700;font-family:monospace;color:#1F4E79;">{sd:.2f}%</td>'
+                f'</tr>'
+                f'<tr>'
+                f'<td style="color:#595959;padding:3px 0;">Sharpe Ratio</td>'
+                f'<td style="text-align:right;font-weight:700;font-family:monospace;color:#1F4E79;">{sharpe:.3f}</td>'
+                f'</tr>'
+                f'</table>'
+                f'</div>'
+            )
+
+        c1 = benchmark_card("100% Asset 1",
+                            benchmarks['asset1']['ret'],
+                            benchmarks['asset1']['sd'],
+                            benchmarks['asset1']['sharpe'],
+                            border_color="#1F4E79")
+        c2 = benchmark_card("100% Asset 2 (more risky)",
+                            benchmarks['asset2']['ret'],
+                            benchmarks['asset2']['sd'],
+                            benchmarks['asset2']['sharpe'],
+                            border_color="#E8A020")
+        c3 = benchmark_card("Equal Weight (50/50)",
+                            benchmarks['equal']['ret'],
+                            benchmarks['equal']['sd'],
+                            benchmarks['equal']['sharpe'],
+                            border_color="#1E6B3A")
+
+        st.markdown(
+            f'<div style="display:flex;gap:16px;margin-bottom:8px;">{c1}{c2}{c3}</div>',
+            unsafe_allow_html=True,
         )
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── RUN SOLVER ────────────────────────────────────────────────────────────
-    _obj_key  = _objective_key_map[sol_objective]
-    _goal_key = _goal_key_map[sol_goal]
-    _con_key  = _constraint_key_map[sol_constraint]
-    _goal_label = {
-        "min":    f"Min {sol_objective}",
-        "max":    f"Max {sol_objective}",
-        "target": f"Target {sol_objective}",
-    }[_goal_key]
-
-    if sol_result_display == "Both":
-        _solver_runs = [("efficient", "Efficient Region"), ("dominated", "Dominated Region")]
-    elif sol_result_display == "Efficient Region Only":
-        _solver_runs = [("efficient", "Efficient Region")]
-    else:
-        _solver_runs = [("dominated", "Dominated Region")]
-
-    _solver_results = []
-    for _rf, _rf_label in _solver_runs:
-        _rr, _feas, _msg = solve_portfolio(
-            frontier_df4,
-            objective     = _obj_key,
-            goal          = _goal_key,
-            constraint    = _con_key,
-            target        = sol_target,
-            result_filter = _rf,
-        )
-        _solver_results.append((_rr, _feas, _msg, _rf_label))
-
-    # ── RESULT DISPLAY ────────────────────────────────────────────────────────
-    _result_heading = {
-        "Efficient Region Only": "Result (Efficient Frontier)",
-        "Dominated Only":        "Result (Denominated)",
-        "Both":                  "Result",
-    }[sol_result_display]
-    st.markdown(f"#### {_result_heading}")
-
-    _feasible_results = [r for r in _solver_results if r[1]]
-    if not _feasible_results:
-        st.error(f"⚠️ Infeasible: {_solver_results[0][2]}")
-    else:
-        _res_cols = st.columns(len(_feasible_results))
-        for _ci, (_rr, _feas, _msg, _rf_label) in enumerate(_feasible_results):
-            with _res_cols[_ci]:
-                st.markdown(
-                    f"<div class='opt-card'>"
-                    f"<div class='opt-card-title'>🎯 {_goal_label} — {_rf_label}</div>"
-                    f"<div class='opt-card-row'><span>Asset 1 Weight</span>"
-                    f"<span class='opt-card-value'>{_rr['w_A1']*100:.1f}%</span></div>"
-                    f"<div class='opt-card-row'><span>Asset 2 Weight</span>"
-                    f"<span class='opt-card-value'>{_rr['w_A2']*100:.1f}%</span></div>"
-                    f"<div class='opt-card-row'><span>Exp. Return</span>"
-                    f"<span class='opt-card-value'>{_rr['ret']:.2f}%</span></div>"
-                    f"<div class='opt-card-row'><span>Std. Dev.</span>"
-                    f"<span class='opt-card-value'>{_rr['sd']:.2f}%</span></div>"
-                    f"<div class='opt-card-row'><span>Sharpe Ratio</span>"
-                    f"<span class='opt-card-value'>{_rr['sharpe']:.3f}</span></div>"
-                    f"<div style='margin-top:8px;font-size:0.78rem;color:#595959'>{_msg}</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
 
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-        _chart_rows = [
-            (_rr, f"{_goal_label} — {_rl}")
-            for _rr, _feas, _, _rl in _solver_results
-            if _feas and _rr is not None
-        ]
-        st.markdown("#### Frontier Chart — Solver Result")
-        st.plotly_chart(
-            chart_frontier_with_solver(
-                frontier_df4, _chart_rows, _con_key, mvp4,
-                allow_short=allow_short,
-            ),
-            use_container_width=True, key="solver_chart",
+        # ── METRICS ROW 2 — Optimal portfolio cards ───────────────────────────
+        st.markdown("#### Optimal Portfolios")
+
+        def opt_card(title, row, extra_note=""):
+            """Render a styled optimal portfolio card."""
+            note_html = (f"<div style='margin-top:6px;font-size:0.78rem;color:#595959'>{extra_note}</div>"
+                         if extra_note else "")
+            html = (
+                f"<div class='opt-card'>"
+                f"<div class='opt-card-title'>{title}</div>"
+                f"<div class='opt-card-row'><span>Asset 1 Weight</span><span class='opt-card-value'>{row['w_A1']*100:.1f}%</span></div>"
+                f"<div class='opt-card-row'><span>Asset 2 Weight</span><span class='opt-card-value'>{row['w_A2']*100:.1f}%</span></div>"
+                f"<div class='opt-card-row'><span>Exp. Return</span><span class='opt-card-value'>{row['ret']:.2f}%</span></div>"
+                f"<div class='opt-card-row'><span>Std. Dev.</span><span class='opt-card-value'>{row['sd']:.2f}%</span></div>"
+                f"<div class='opt-card-row'><span>Sharpe Ratio</span><span class='opt-card-value'>{row['sharpe']:.3f}</span></div>"
+                f"{note_html}"
+                f"</div>"
+            )
+            st.markdown(html, unsafe_allow_html=True)
+
+        n_cards = 4 if allow_short else 3
+        card_cols = st.columns(n_cards)
+
+        with card_cols[0]:
+            opt_card("⭐ Min. Variance Portfolio", mvp,
+                     "Lowest achievable Std. Dev.")
+        with card_cols[1]:
+            opt_card("⭐ Max. Sharpe Portfolio", max_sr,
+                     "Highest risk-adjusted return (long-only)")
+        with card_cols[2]:
+            opt_card("⭐ Max. Return (Long Only)", max_ret_lo,
+                     "Asset 2 Weight = 100%")
+        if allow_short:
+            with card_cols[3]:
+                opt_card("⭐ Max. Return (Leveraged)", max_ret_lev,
+                         "Asset 2 Weight = 200% — requires short-selling")
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # ── METRICS ROW 3 — Efficient frontier region ─────────────────────────
+        st.markdown("#### 📊 Efficient Frontier Region")
+        st.caption(
+            "Long-only portfolios above the Min. Variance Portfolio "
+            "(Asset 1 Weight: 0%→100%, Exp. Return ≥ MVP Exp. Return) — "
+            "consistent with Prof. Weisbenner's Lesson 1-5."
         )
+
+        if eff_summary:
+            mvp_row = eff_summary['mvp_row']
+            hi_row  = eff_summary['hi_ret_row']
+
+            mvp_w_a1 = mvp_row["w_A1"] * 100
+            mvp_w_a2 = mvp_row["w_A2"] * 100
+            mvp_sd   = mvp_row["sd"]
+            mvp_ret  = mvp_row["ret"]
+
+            hi_w_a1  = hi_row["w_A1"] * 100
+            hi_w_a2  = hi_row["w_A2"] * 100
+            hi_sd    = hi_row["sd"]
+            hi_ret   = hi_row["ret"]
+
+            endpoint = f"{hi_w_a1:.0f}% A1 / {hi_w_a2:.0f}% A2"
+            w_a1_dir = "increases" if hi_w_a1 > mvp_w_a1 else "decreases"
+            w_a2_dir = "increases" if hi_w_a2 > mvp_w_a2 else "decreases"
+            sd_dir   = "increases" if hi_sd > mvp_sd else "decreases"
+
+            pk_a1    = eff_summary['peak_w_A1'] * 100
+            pk_a2    = eff_summary['peak_w_A2'] * 100
+
+            e1, e2, e3 = st.columns(3)
+            e1.metric(
+                "Asset 1 Weight Range",
+                f"{mvp_w_a1:.0f}%",
+                f"→ {hi_w_a1:.0f}%",
+                help=(f"Asset 1 weight at MVP = {mvp_w_a1:.0f}%, "
+                      f"{w_a1_dir} to {hi_w_a1:.0f}% at the high-return endpoint ({endpoint})"),
+            )
+            e2.metric(
+                "Asset 2 Weight Range",
+                f"{mvp_w_a2:.0f}%",
+                f"→ {hi_w_a2:.0f}%",
+                help=(f"Asset 2 weight at MVP = {mvp_w_a2:.0f}%, "
+                      f"{w_a2_dir} to {hi_w_a2:.0f}% at the high-return endpoint ({endpoint})"),
+            )
+            e3.metric(
+                "Peak Sharpe Ratio",
+                f"{eff_summary['peak_sharpe']:.3f}",
+                help=(f"Highest Sharpe ratio in the efficient frontier region — "
+                      f"at Asset 1 Weight = {pk_a1:.0f}%, Asset 2 Weight = {pk_a2:.0f}%"),
+            )
+
+            e4, e5, e6 = st.columns(3)
+            e4.metric(
+                "Std. Dev. Range",
+                f"{eff_summary['sd_range'][0]:.2f}%",
+                f"→ {eff_summary['sd_range'][1]:.2f}%",
+                help=(f"Std. Dev. at MVP = {mvp_sd:.2f}%, "
+                      f"{sd_dir} to {hi_sd:.2f}% at the high-return endpoint ({endpoint})"),
+            )
+            e5.metric(
+                "Exp. Return Range",
+                f"{eff_summary['ret_range'][0]:.2f}%",
+                f"→ {eff_summary['ret_range'][1]:.2f}%",
+                help=(f"Exp. Return at MVP = {mvp_ret:.2f}%, "
+                      f"increases to {hi_ret:.2f}% at the high-return endpoint ({endpoint})"),
+            )
+            e6.metric(
+                "Portfolios in Region",
+                f"{eff_summary['n_portfolios']}",
+                help=(f"Number of portfolios with Exp. Return ≥ MVP return ({mvp_ret:.2f}%) — "
+                      f"Asset 1 weight from {mvp_w_a1:.0f}% (MVP) to {hi_w_a1:.0f}% ({endpoint})"),
+            )
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # ── CHARTS ───────────────────────────────────────────────────────────
+        st.markdown("#### Charts")
+
+        if allow_short:
+            row1_c1, row1_c2 = st.columns(2)
+            with row1_c1:
+                st.plotly_chart(
+                    chart_frontier_all(frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp, max_sr, max_ret_lo, max_ret_lev, allow_short=allow_short),
+                    use_container_width=True, key="f_all"
+                )
+            with row1_c2:
+                st.plotly_chart(
+                    chart_frontier_long_only(frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp, max_sr, max_ret_lo),
+                    use_container_width=True, key="f_effdom"
+                )
+            row2_c1, row2_c2 = st.columns(2)
+            with row2_c1:
+                st.plotly_chart(
+                    chart_frontier_short_A1(frontier_df, f_r1, f_sd1, f_r2, f_sd2, max_sr, max_ret_lo, max_ret_lev, allow_short=allow_short),
+                    use_container_width=True, key="f_shortA1"
+                )
+            with row2_c2:
+                st.plotly_chart(
+                    chart_frontier_long_A1(frontier_df, f_r1, f_sd1, f_r2, f_sd2, max_sr, max_ret_lo, max_ret_lev, allow_short=allow_short),
+                    use_container_width=True, key="f_longA1"
+                )
+        else:
+            st.plotly_chart(
+                chart_frontier_long_only(frontier_df, f_r1, f_sd1, f_r2, f_sd2, mvp, max_sr, max_ret_lo),
+                use_container_width=True, key="f_effdom_only"
+            )
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # ── SUMMARY TABLE ─────────────────────────────────────────────────────
+        st.markdown("#### Portfolio Summary Table")
+        st.plotly_chart(
+            chart_frontier_summary_table(f_summary_tbl),
+            use_container_width=True, key="f_summary_tbl"
+        )
+
+    # ── INNER SUB-TAB 2: Correlation Effect ──────────────────────────────────
+    with sub_rho:
+
+        _r = compute_rho()
+        rho_frontiers = _r["rho_frontiers"]
+        rho_mvp_df    = _r["rho_mvp_df"]
+        rho_msp_df    = _r["rho_msp_df"]
+        mvp_points    = _r["mvp_points"]
+        msp_points    = _r["msp_points"]
+        f_r1, f_sd1   = _r["f_r1"], _r["f_sd1"]
+        f_r2, f_sd2   = _r["f_r2"], _r["f_sd2"]
+        f_rho, f_rf   = _r["f_rho"], _r["f_rf"]
+
+        if not allow_short:
+            st.markdown(
+                "<div class='info-box'>"
+                "ℹ️ Correlation frontiers are displayed as long-only "
+                "(Asset 1 & Asset 2 Weights: 0% → 100%). "
+                "Enable short-selling in the sidebar to see how unconstrained MVP weights change across correlations."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                "<div class='warn-box'>"
+                "⚠️ <b>Short-selling is enabled.</b> "
+                "Frontiers now extend to Asset 1 Weight: −100% → +200% | Asset 2 Weight: 200% → -100%, revealing the full diversification curve. "
+                "MVP weights are unconstrained — they may fall outside [0%, 100%]"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+        # ── METRICS ──────────────────────────────────────────────────────────
+        st.markdown("#### Current ρ (Correlation)")
+
+        mvp_sd_neg1 = rho_mvp_sd(f_sd1, f_sd2, -1.0, allow_short=allow_short)
+        mvp_sd_zero = rho_mvp_sd(f_sd1, f_sd2,  0.0, allow_short=allow_short)
+        mvp_sd_pos1 = rho_mvp_sd(f_sd1, f_sd2,  1.0, allow_short=allow_short)
+        mvp_sd_curr = rho_mvp_sd(f_sd1, f_sd2,  f_rho, allow_short=allow_short)
+
+        st.metric("Current ρ", f"{f_rho:.1f}")
+
+        st.markdown("### MVP Std. Deviation across Different Correlation")
+        r1c, r2c, r3c, r4c = st.columns(4)
+        r1c.metric(f"MVP Std. Dev. at ρ={f_rho:.1f}", f"{mvp_sd_curr:.2f}%",
+                   help="MVP std dev at the current correlation")
+        r2c.metric("MVP Std. Dev. at ρ=−1", f"{mvp_sd_neg1:.2f}%",
+                   help="Lowest achievable risk — perfect negative correlation")
+        r3c.metric("MVP Std. Dev. at ρ=0",  f"{mvp_sd_zero:.2f}%",
+                   help="Risk at zero correlation")
+        r4c.metric("MVP Std. Dev. at ρ=+1", f"{mvp_sd_pos1:.2f}%",
+                   help="No diversification benefit — assets move in lockstep")
+
+        benefit  = mvp_sd_zero - mvp_sd_curr
+        abs_diff = abs(benefit)
+        if abs_diff < 0.005:
+            benefit_label = f"σ unchanged vs ρ=0  (both {mvp_sd_curr:.2f}%)"
+            benefit_help  = "Current ρ produces the same MVP std dev as ρ=0 given these asset parameters."
+        elif benefit > 0:
+            benefit_label = f"σ reduced by {abs_diff:.2f}%  ✅ (MVP σ: {mvp_sd_curr:.2f}% vs {mvp_sd_zero:.2f}% at ρ=0)"
+            benefit_help  = f"At ρ={f_rho:.1f}, MVP std dev is {mvp_sd_curr:.2f}% — lower than {mvp_sd_zero:.2f}% at ρ=0. Current correlation improves diversification."
+        else:
+            benefit_label = f"⚠️ MVP σ increased by {abs_diff:.2f}% at current ρ"
+            benefit_help  = f"At ρ={f_rho:.1f}, MVP std dev is {mvp_sd_curr:.2f}% — higher than {mvp_sd_zero:.2f}% at ρ=0. Current correlation reduces diversification benefit."
+        st.metric(
+            f"Diversification vs ρ=0 (current ρ={f_rho:.1f})",
+            benefit_label,
+            help=benefit_help,
+        )
+
+        st.markdown("#### Max Sharpe Ratio Portfolio at Current ρ")
+        _msp_curr = next(
+            (v for k, v in msp_points.items() if abs(k - f_rho) < 1e-9),
+            list(msp_points.values())[-1]
+        )
+        _mc1, _mc2, _mc3, _mc4 = st.columns(4)
+        _mc1.metric(f"MSP Asset 1 Weight at ρ={f_rho:.1f}",
+                    f"{_msp_curr['w_A1'] * 100:.1f}%",
+                    help="Weight in Asset 1 for the Max Sharpe Portfolio at the current correlation")
+        _mc2.metric(f"MSP Std. Dev. at ρ={f_rho:.1f}",
+                    f"{_msp_curr['sd']:.2f}%",
+                    help="Portfolio std dev of the Max Sharpe Portfolio at the current correlation")
+        _mc3.metric(f"MSP Exp. Return at ρ={f_rho:.1f}",
+                    f"{_msp_curr['ret']:.2f}%",
+                    help="Expected return of the Max Sharpe Portfolio at the current correlation")
+        _mc4.metric(f"MSP Sharpe Ratio at ρ={f_rho:.1f}",
+                    f"{_msp_curr['sharpe']:.3f}",
+                    help="Sharpe ratio of the Max Sharpe Portfolio at the current correlation")
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # ── CHARTS ───────────────────────────────────────────────────────────
+        st.markdown("#### Effect of Correlation on the Efficient Frontier")
+        st.plotly_chart(
+            chart_rho_effect(rho_frontiers, f_rho, f_r1, f_sd1, f_r2, f_sd2,
+                             mvp_points=mvp_points, msp_points=msp_points,
+                             allow_short=allow_short),
+            use_container_width=True, key="rho_chart"
+        )
+        _note1 = (
+            "• Full frontier: Asset 1 Weight −100% → +200% (short-selling enabled — MVP weights unconstrained)"
+            if allow_short
+            else "• Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)"
+        )
+        _note2 = (
+            "• Asset markers (100% A1, 0% A2) and (0% A1, 100% A2) are ρ-invariant — "
+            "all frontier curves share the same endpoints — because "
+            f"σₚ = √(w₁²σ₁² + w₂²σ₂² + 2w₁w₂ρσ₁σ₂); when w₁=0 → σₚ=σ₂, when w₂=0 → σₚ=σ₁"
+        )
+        _note3 = (
+            "• 0-100% A1 \| 100-0% A2: Lower ρ → frontier bows further left → more diversification benefit. "
+            "Reason: both w₁ and w₂ are positive, the covariance term (2w₁w₂ρσ₁σ₂) decreases with lower ρ"
+        )
+        _note4 = (
+            "• Beyond 100% A2 (short A1, w₁ &lt; 0): correlation effect <b>reverses</b> — "
+            "higher ρ reduces variance here, lower ρ increases it. "
+            "Reason: w₁ &lt; 0 flips the sign of the covariance term (2w₁w₂ρσ₁σ₂)."
+            if allow_short
+            else ""
+        )
+
+        st.markdown(
+            f"<small>{_note1}<br>"
+            f"{_note2}<br>"
+            f"{_note3}<br>"
+            f"{_note4}</small>",
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        st.markdown("#### MVP Std. Dev. Comparison Across Correlation")
+        st.plotly_chart(
+            chart_rho_mvp_table(rho_mvp_df),
+            use_container_width=True, key="rho_mvp_tbl"
+        )
+
+        st.markdown("#### Max Sharpe Ratio Portfolio Comparison Across Correlation")
+        st.plotly_chart(
+            chart_rho_msp_table(rho_msp_df),
+            use_container_width=True, key="rho_msp_tbl"
+        )
+
+    # ── INNER SUB-TAB 3: Portfolio Solver ────────────────────────────────────
+    with sub_solver:
+
+        st.caption("Parameters are shared from the expander above.")
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        st.markdown("#### 🎯 Solver Configuration")
+
+        _constraint_options_lo = [
+            "All Allocations",
+            "Long Only",
+        ]
+        _constraint_options_all = [
+            "All Allocations",
+            "Long Only",
+            "Long Asset 1 / Short Asset 2",
+            "Short Asset 1 / Long Asset 2",
+        ]
+        _constraint_options = _constraint_options_all if allow_short else _constraint_options_lo
+
+        if st.session_state.sol_constraint not in _constraint_options:
+            st.session_state.sol_constraint = _constraint_options[0]
+
+        _constraint_key_map = {
+            "All Allocations":               "full",
+            "Long Only":                     "long_only",
+            "Long Asset 1 / Short Asset 2":  "long_A1",
+            "Short Asset 1 / Long Asset 2":  "short_A1",
+        }
+        _objective_key_map = {
+            "Expected Return": "ret",
+            "Std. Dev.":       "sd",
+            "Sharpe Ratio":    "sharpe",
+        }
+        _goal_key_map = {
+            "Minimize":         "min",
+            "Maximize":         "max",
+            "Hit Target Value": "target",
+        }
+
+        sc1, sc2, sc3 = st.columns(3)
+        with sc1:
+            sol_objective = st.radio(
+                "Objective Metric",
+                ["Expected Return", "Std. Dev.", "Sharpe Ratio"],
+                index=["Expected Return", "Std. Dev.", "Sharpe Ratio"].index(
+                    st.session_state.sol_objective
+                ),
+                key="sol_objective",
+                help="Which portfolio metric to optimise or target.",
+            )
+        with sc2:
+            sol_goal = st.radio(
+                "Goal",
+                ["Minimize", "Maximize", "Hit Target Value"],
+                index=["Minimize", "Maximize", "Hit Target Value"].index(
+                    st.session_state.sol_goal
+                ),
+                key="sol_goal",
+                help="Find the minimum, maximum, or the allocation closest to a specific value.",
+            )
+        with sc3:
+            sol_constraint = st.selectbox(
+                "Constraint Region",
+                _constraint_options,
+                index=_constraint_options.index(st.session_state.sol_constraint),
+                key="sol_constraint",
+                help="Restrict the search to this region of the frontier.",
+            )
+
+        _result_display_opts = ["Both", "Efficient Region Only", "Dominated Only"]
+        sol_result_display = st.radio(
+            "Result Display",
+            _result_display_opts,
+            index=_result_display_opts.index(st.session_state.sol_result_display),
+            horizontal=True,
+            key="sol_result_display",
+            help="Show results from the efficient region, dominated region, or both.",
+        )
+
+        sol_target = None
+        if sol_goal == "Hit Target Value":
+            _obj_col = _objective_key_map[sol_objective]
+            _ckey    = _constraint_key_map[sol_constraint]
+            _df_tmp  = frontier_df.copy()
+            if _ckey == "long_only":
+                _df_tmp = _df_tmp[_df_tmp["weight_region"] == "long_only"]
+            elif _ckey == "long_A1":
+                _df_tmp = _df_tmp[_df_tmp["weight_region"] == "long_A1"]
+            elif _ckey == "short_A1":
+                _df_tmp = _df_tmp[_df_tmp["weight_region"] == "short_A1"]
+            if sol_result_display == "Efficient Region Only":
+                _df_tmp = _df_tmp[_df_tmp["region"] == "efficient"]
+            elif sol_result_display == "Dominated Only":
+                _df_tmp = _df_tmp[_df_tmp["region"] == "dominated"]
+
+            if not _df_tmp.empty:
+                _v_min     = float(_df_tmp[_obj_col].min())
+                _v_max     = float(_df_tmp[_obj_col].max())
+                _v_default = max(_v_min, min(_v_max, float(st.session_state.sol_target)))
+            else:
+                _v_min, _v_max, _v_default = 0.0, 30.0, 10.0
+
+            _unit = "%" if sol_objective in ("Expected Return", "Std. Dev.") else ""
+            sol_target = st.number_input(
+                f"Target {sol_objective}{' (%)' if _unit else ''}",
+                min_value=round(_v_min - abs(_v_min) * 0.5, 2),
+                max_value=round(_v_max + abs(_v_max) * 0.5, 2),
+                value=round(_v_default, 2),
+                step=0.01,
+                format="%.2f",
+                key="sol_target",
+                help=(f"Feasible range in current constraint region: "
+                      f"{_v_min:.2f}{_unit} → {_v_max:.2f}{_unit}"),
+            )
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # ── RUN SOLVER ────────────────────────────────────────────────────────
+        _obj_key  = _objective_key_map[sol_objective]
+        _goal_key = _goal_key_map[sol_goal]
+        _con_key  = _constraint_key_map[sol_constraint]
+        _goal_label = {
+            "min":    f"Min {sol_objective}",
+            "max":    f"Max {sol_objective}",
+            "target": f"Target {sol_objective}",
+        }[_goal_key]
+
+        if sol_result_display == "Both":
+            _solver_runs = [("efficient", "Efficient Region"), ("dominated", "Dominated Region")]
+        elif sol_result_display == "Efficient Region Only":
+            _solver_runs = [("efficient", "Efficient Region")]
+        else:
+            _solver_runs = [("dominated", "Dominated Region")]
+
+        _solver_results = []
+        for _rf, _rf_label in _solver_runs:
+            _rr, _feas, _msg = solve_portfolio(
+                frontier_df,
+                objective     = _obj_key,
+                goal          = _goal_key,
+                constraint    = _con_key,
+                target        = sol_target,
+                result_filter = _rf,
+            )
+            _solver_results.append((_rr, _feas, _msg, _rf_label))
+
+        # ── RESULT DISPLAY ────────────────────────────────────────────────────
+        _result_heading = {
+            "Efficient Region Only": "Result (Efficient Frontier)",
+            "Dominated Only":        "Result (Denominated)",
+            "Both":                  "Result",
+        }[sol_result_display]
+        st.markdown(f"#### {_result_heading}")
+
+        _feasible_results = [r for r in _solver_results if r[1]]
+        if not _feasible_results:
+            st.error(f"⚠️ Infeasible: {_solver_results[0][2]}")
+        else:
+            _res_cols = st.columns(len(_feasible_results))
+            for _ci, (_rr, _feas, _msg, _rf_label) in enumerate(_feasible_results):
+                with _res_cols[_ci]:
+                    st.markdown(
+                        f"<div class='opt-card'>"
+                        f"<div class='opt-card-title'>🎯 {_goal_label} — {_rf_label}</div>"
+                        f"<div class='opt-card-row'><span>Asset 1 Weight</span>"
+                        f"<span class='opt-card-value'>{_rr['w_A1']*100:.1f}%</span></div>"
+                        f"<div class='opt-card-row'><span>Asset 2 Weight</span>"
+                        f"<span class='opt-card-value'>{_rr['w_A2']*100:.1f}%</span></div>"
+                        f"<div class='opt-card-row'><span>Exp. Return</span>"
+                        f"<span class='opt-card-value'>{_rr['ret']:.2f}%</span></div>"
+                        f"<div class='opt-card-row'><span>Std. Dev.</span>"
+                        f"<span class='opt-card-value'>{_rr['sd']:.2f}%</span></div>"
+                        f"<div class='opt-card-row'><span>Sharpe Ratio</span>"
+                        f"<span class='opt-card-value'>{_rr['sharpe']:.3f}</span></div>"
+                        f"<div style='margin-top:8px;font-size:0.78rem;color:#595959'>{_msg}</div>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+            _chart_rows = [
+                (_rr, f"{_goal_label} — {_rl}")
+                for _rr, _feas, _, _rl in _solver_results
+                if _feas and _rr is not None
+            ]
+            st.markdown("#### Frontier Chart — Solver Result")
+            st.plotly_chart(
+                chart_frontier_with_solver(
+                    frontier_df, _chart_rows, _con_key, mvp,
+                    allow_short=allow_short,
+                ),
+                use_container_width=True, key="solver_chart",
+            )
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# OUTER TAB — N-ASSET PORTFOLIO
+# ────────────────────────────────────────────────────────────────────────────
+with tab_n:
+    st.info("🚧 N-Asset Portfolio analysis — coming soon.", icon="🚧")
