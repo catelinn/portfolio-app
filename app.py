@@ -1417,8 +1417,10 @@ with tab_n:
             # Correlation matrix editor
             st.markdown("#### Correlation Matrix")
             st.caption(
-                "Set pairwise correlations below — the matrix is automatically "
-                "symmetrised. Each asset's correlation with itself is fixed at 1.0."
+                "Edit pairwise correlations in the table below — the matrix is "
+                "automatically symmetrised. Diagonal cells (asset with itself) are "
+                "fixed at 1.0 and highlighted in blue; entering any other value "
+                "triggers an error and is auto-corrected."
             )
 
             _cur_names = [
@@ -1426,33 +1428,77 @@ with tab_n:
                 for i in range(_n)
             ]
 
-            # Build list of unique pairs (i < j)
-            _pairs = [(i, j) for i in range(_n) for j in range(i + 1, _n)]
-            _cols_per_row = 3
-            for _row_start in range(0, len(_pairs), _cols_per_row):
-                _row_pairs = _pairs[_row_start: _row_start + _cols_per_row]
-                _cols = st.columns(len(_row_pairs))
-                for _col, (_pi, _pj) in zip(_cols, _row_pairs):
-                    with _col:
-                        _key = f"n_corr_{_pi}_{_pj}"
-                        st.number_input(
-                            f"{_cur_names[_pi]} / {_cur_names[_pj]}",
-                            min_value=-1.0,
-                            max_value=1.0,
-                            value=float(st.session_state.get(_key, 0.3)),
-                            step=0.05,
-                            format="%.2f",
-                            key=_key,
+            # Build initial matrix DataFrame from session state
+            _corr_init = {}
+            for _j in range(_n):
+                _col_data = []
+                for _i in range(_n):
+                    if _i == _j:
+                        _col_data.append(1.0)
+                    elif _i < _j:
+                        _col_data.append(
+                            float(st.session_state.get(f"n_corr_{_i}_{_j}", 0.3))
                         )
+                    else:
+                        _col_data.append(
+                            float(st.session_state.get(f"n_corr_{_j}_{_i}", 0.3))
+                        )
+                _corr_init[_cur_names[_j]] = _col_data
 
-            # Build symmetric matrix with forced diagonal = 1
-            _arr = np.eye(_n)
-            for _pi, _pj in _pairs:
-                _v = float(st.session_state.get(f"n_corr_{_pi}_{_pj}", 0.3))
-                _arr[_pi, _pj] = _v
-                _arr[_pj, _pi] = _v
+            _corr_df_in = pd.DataFrame(_corr_init, index=_cur_names)
+
+            # Styled read-only view — dark blue diagonal
+            def _style_corr_diag(df):
+                styles = pd.DataFrame("", index=df.index, columns=df.columns)
+                for _di in range(len(df)):
+                    styles.iloc[_di, _di] = (
+                        "background-color: #1a3a6b; color: white; font-weight: bold;"
+                    )
+                return styles
+
+            st.dataframe(
+                _corr_df_in.style.apply(_style_corr_diag, axis=None).format("{:.2f}"),
+                use_container_width=True,
+            )
+            st.caption("Current matrix — diagonal fixed at 1.0 (blue). Edit values below:")
+
+            _col_cfg = {
+                col: st.column_config.NumberColumn(
+                    col, min_value=-1.0, max_value=1.0, format="%.2f"
+                )
+                for col in _cur_names
+            }
+            _edited = st.data_editor(
+                _corr_df_in,
+                use_container_width=True,
+                key=f"n_corr_editor_{_n}",
+                column_config=_col_cfg,
+            )
+
+            # Post-process: symmetrise, clamp, check diagonal
+            _arr = _edited.values.astype(float)
+            _arr = (_arr + _arr.T) / 2.0
             _arr = np.clip(_arr, -1.0, 1.0)
+
+            _diag_changed = [
+                _cur_names[_di] for _di in range(_n)
+                if abs(_arr[_di, _di] - 1.0) > 1e-9
+            ]
+            if _diag_changed:
+                st.error(
+                    "⛔ Diagonal entries must equal 1.0 — an asset is always "
+                    "perfectly correlated with itself. "
+                    f"Auto-correcting: {', '.join(_diag_changed)}."
+                )
+
             np.fill_diagonal(_arr, 1.0)
+
+            # Persist off-diagonal back to session state
+            for _i in range(_n):
+                for _j in range(_i + 1, _n):
+                    st.session_state[f"n_corr_{_i}_{_j}"] = round(
+                        float(_arr[_i, _j]), 3
+                    )
 
             _is_valid, _corr_errs = validate_corr_matrix(_arr)
             if not _is_valid:
