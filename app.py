@@ -762,6 +762,10 @@ with tab2:
         else "• Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)"
     )
     _note2 = (
+        "• 0-100% A1 (100-0% A2): Lower ρ → frontier bows further left → more diversification benefit"
+        "Reason: both w₁ and w₂ are positive, the covariance term 2w₁w₂ρσ₁σ₂ decreases with lower ρ"
+    )
+    _note3 = (
         "• Beyond 100% A2 (short A1, w₁ &lt; 0): correlation effect <b>reverses</b> — "
         "higher ρ reduces variance here, lower ρ increases it. "
         "Reason: w₁ &lt; 0 flips the sign of the covariance term (2w₁w₂ρσ₁σ₂).<br>"
@@ -775,14 +779,6 @@ with tab2:
         f"σₚ = √(w₁²σ₁² + w₂²σ₂² + 2w₁w₂ρσ₁σ₂); when w₁=0 → σₚ=σ₂, when w₂=0 → σₚ=σ₁<br>"
         f"{_note2}</small>",
         unsafe_allow_html=True,
-    )
-
-    st.markdown(
-    f"<small>{_note1}<br>"
-    "• 0-100% A1 (100-0% A2): Lower ρ → frontier bows further left → more diversification benefit"
-    "Reason: both w₁ and w₂ are positive, the covariance term 2w₁w₂ρσ₁σ₂ decreases with lower ρ"
-    f"{_note2}</small>",
-    unsafe_allow_html=True,
     )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
