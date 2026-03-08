@@ -762,7 +762,7 @@ with tab2:
         else "• Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)"
     )
     _note2 = (
-        "• 0-100% A1 | 100-0% A2: Lower ρ → frontier bows further left → more diversification benefit. "
+        "• 0-100% A1 \| 100-0% A2: Lower ρ → frontier bows further left → more diversification benefit. "
         "Reason: both w₁ and w₂ are positive, the covariance term (2w₁w₂ρσ₁σ₂) decreases with lower ρ"
     )
     _note3 = (
