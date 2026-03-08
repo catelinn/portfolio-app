@@ -584,14 +584,17 @@ with tab_two:
     f_rho, f_rf   = _f["f_rho"], _f["f_rf"]
 
     # ── INNER SUB-TABS ────────────────────────────────────────────────────────
-    sub_frontier, sub_rho, sub_solver = st.tabs([
-        "📊  Portfolio Frontier",
-        "🔗  Correlation Effect",
-        "🎯  Portfolio Solver",
-    ])
+    _SUB_OPTS = ["📊  Portfolio Frontier", "🔗  Correlation Effect", "🎯  Portfolio Solver"]
+    _sub_tab = st.segmented_control(
+        "Section",
+        _SUB_OPTS,
+        default=_SUB_OPTS[0],
+        key="two_risky_sub_tab",
+        label_visibility="collapsed",
+    )
 
     # ── INNER SUB-TAB 1: Portfolio Frontier ──────────────────────────────────
-    with sub_frontier:
+    if _sub_tab == _SUB_OPTS[0]:
 
         if not allow_short:
             st.markdown(
@@ -825,7 +828,7 @@ with tab_two:
         )
 
     # ── INNER SUB-TAB 2: Correlation Effect ──────────────────────────────────
-    with sub_rho:
+    elif _sub_tab == _SUB_OPTS[1]:
 
         _r = compute_rho()
         rho_frontiers = _r["rho_frontiers"]
@@ -968,7 +971,7 @@ with tab_two:
         )
 
     # ── INNER SUB-TAB 3: Portfolio Solver ────────────────────────────────────
-    with sub_solver:
+    elif _sub_tab == _SUB_OPTS[2]:
 
         st.caption("Parameters are shared from the expander above.")
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
