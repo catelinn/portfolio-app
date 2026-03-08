@@ -184,8 +184,9 @@ DEFAULTS = dict(
     # Solver defaults
     sol_objective="Expected Return",
     sol_goal="Maximize",
-    sol_constraint="Efficient Frontier Only",
+    sol_constraint="Long Only",
     sol_target=10.0,
+    sol_result_display="Both",
 )
 
 for key, val in DEFAULTS.items():
@@ -1051,16 +1052,12 @@ with tab4:
 
     _constraint_options_lo = [
         "Long Only",
-        "Efficient Frontier Only",
-        "Dominated Assets Only",
     ]
     _constraint_options_all = [
-        "Full Curve",
+        "All Allocations",
         "Long Only",
         "Long Asset 1 / Short Asset 2",
         "Short Asset 1 / Long Asset 2",
-        "Efficient Frontier Only",
-        "Dominated Assets Only",
     ]
     _constraint_options = _constraint_options_all if allow_short else _constraint_options_lo
 
@@ -1068,12 +1065,10 @@ with tab4:
         st.session_state.sol_constraint = _constraint_options[0]
 
     _constraint_key_map = {
-        "Full Curve":                        "full",
-        "Long Only":                         "long_only",
-        "Long Asset 1 / Short Asset 2":      "long_A1",
-        "Short Asset 1 / Long Asset 2":      "short_A1",
-        "Efficient Frontier Only":           "efficient",
-        "Dominated Assets Only":             "dominated",
+        "All Allocations":               "full",
+        "Long Only":                     "long_only",
+        "Long Asset 1 / Short Asset 2":  "long_A1",
+        "Short Asset 1 / Long Asset 2":  "short_A1",
     }
     _objective_key_map = {
         "Expected Return": "ret",
@@ -1116,6 +1111,16 @@ with tab4:
             help="Restrict the search to this region of the frontier.",
         )
 
+    _result_display_opts = ["Both", "Efficient Region Only", "Dominated Only"]
+    sol_result_display = st.radio(
+        "Result Display",
+        _result_display_opts,
+        index=_result_display_opts.index(st.session_state.sol_result_display),
+        horizontal=True,
+        key="sol_result_display",
+        help="Show results from the efficient region, dominated region, or both.",
+    )
+
     # Target value input — only shown for Hit Target Value
     sol_target = None
     if sol_goal == "Hit Target Value":
@@ -1128,10 +1133,10 @@ with tab4:
             _df_tmp = _df_tmp[_df_tmp["weight_region"] == "long_A1"]
         elif _ckey == "short_A1":
             _df_tmp = _df_tmp[_df_tmp["weight_region"] == "short_A1"]
-        elif _ckey == "efficient":
-            _df_tmp = _df_tmp[(_df_tmp["region"] == "efficient") & (_df_tmp["weight_region"] == "long_only")]
-        elif _ckey == "dominated":
-            _df_tmp = _df_tmp[(_df_tmp["region"] == "dominated") & (_df_tmp["weight_region"] == "long_only")]
+        if sol_result_display == "Efficient Region Only":
+            _df_tmp = _df_tmp[_df_tmp["region"] == "efficient"]
+        elif sol_result_display == "Dominated Only":
+            _df_tmp = _df_tmp[_df_tmp["region"] == "dominated"]
 
         if not _df_tmp.empty:
             _v_min     = float(_df_tmp[_obj_col].min())
@@ -1159,51 +1164,66 @@ with tab4:
     _obj_key  = _objective_key_map[sol_objective]
     _goal_key = _goal_key_map[sol_goal]
     _con_key  = _constraint_key_map[sol_constraint]
+    _goal_label = {
+        "min":    f"Min {sol_objective}",
+        "max":    f"Max {sol_objective}",
+        "target": f"Target {sol_objective}",
+    }[_goal_key]
 
-    result_row4, feasible4, message4 = solve_portfolio(
-        frontier_df4,
-        objective  = _obj_key,
-        goal       = _goal_key,
-        constraint = _con_key,
-        target     = sol_target,
-    )
+    if sol_result_display == "Both":
+        _solver_runs = [("efficient", "Efficient Region"), ("dominated", "Dominated Region")]
+    elif sol_result_display == "Efficient Region Only":
+        _solver_runs = [("efficient", "Efficient Region")]
+    else:
+        _solver_runs = [("dominated", "Dominated Region")]
+
+    _solver_results = []
+    for _rf, _rf_label in _solver_runs:
+        _rr, _feas, _msg = solve_portfolio(
+            frontier_df4,
+            objective     = _obj_key,
+            goal          = _goal_key,
+            constraint    = _con_key,
+            target        = sol_target,
+            result_filter = _rf,
+        )
+        _solver_results.append((_rr, _feas, _msg, _rf_label))
 
     # ── RESULT DISPLAY ────────────────────────────────────────────────────────
     st.markdown("#### Result")
 
-    if not feasible4:
-        st.error(f"⚠️ Infeasible: {message4}")
+    _feasible_results = [r for r in _solver_results if r[1]]
+    if not _feasible_results:
+        st.error(f"⚠️ Infeasible: {_solver_results[0][2]}")
     else:
-        with st.container():
-            _goal_label = {
-                "min":    f"Min {sol_objective}",
-                "max":    f"Max {sol_objective}",
-                "target": f"Target {sol_objective}",
-            }[_goal_key]
-            st.markdown(
-                f"<div class='opt-card'>"
-                f"<div class='opt-card-title'>🎯 {_goal_label} — {sol_constraint}</div>"
-                f"<div class='opt-card-row'><span>Asset 1 Weight</span>"
-                f"<span class='opt-card-value'>{result_row4['w_A1']*100:.1f}%</span></div>"
-                f"<div class='opt-card-row'><span>Asset 2 Weight</span>"
-                f"<span class='opt-card-value'>{result_row4['w_A2']*100:.1f}%</span></div>"
-                f"<div class='opt-card-row'><span>Exp. Return</span>"
-                f"<span class='opt-card-value'>{result_row4['ret']:.2f}%</span></div>"
-                f"<div class='opt-card-row'><span>Std. Dev.</span>"
-                f"<span class='opt-card-value'>{result_row4['sd']:.2f}%</span></div>"
-                f"<div class='opt-card-row'><span>Sharpe Ratio</span>"
-                f"<span class='opt-card-value'>{result_row4['sharpe']:.3f}</span></div>"
-                f"<div style='margin-top:8px;font-size:0.78rem;color:#595959'>{message4}</div>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
+        _res_cols = st.columns(len(_feasible_results))
+        for _ci, (_rr, _feas, _msg, _rf_label) in enumerate(_feasible_results):
+            with _res_cols[_ci]:
+                st.markdown(
+                    f"<div class='opt-card'>"
+                    f"<div class='opt-card-title'>🎯 {_goal_label} — {_rf_label}</div>"
+                    f"<div class='opt-card-row'><span>Asset 1 Weight</span>"
+                    f"<span class='opt-card-value'>{_rr['w_A1']*100:.1f}%</span></div>"
+                    f"<div class='opt-card-row'><span>Asset 2 Weight</span>"
+                    f"<span class='opt-card-value'>{_rr['w_A2']*100:.1f}%</span></div>"
+                    f"<div class='opt-card-row'><span>Exp. Return</span>"
+                    f"<span class='opt-card-value'>{_rr['ret']:.2f}%</span></div>"
+                    f"<div class='opt-card-row'><span>Std. Dev.</span>"
+                    f"<span class='opt-card-value'>{_rr['sd']:.2f}%</span></div>"
+                    f"<div class='opt-card-row'><span>Sharpe Ratio</span>"
+                    f"<span class='opt-card-value'>{_rr['sharpe']:.3f}</span></div>"
+                    f"<div style='margin-top:8px;font-size:0.78rem;color:#595959'>{_msg}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
+        _chart_rows = [(_rr, _rl) for _rr, _feas, _, _rl in _solver_results if _feas and _rr is not None]
         st.markdown("#### Frontier Chart — Solver Result")
         st.plotly_chart(
             chart_frontier_with_solver(
-                frontier_df4, result_row4, _con_key, mvp4,
+                frontier_df4, _chart_rows, _con_key, mvp4,
                 allow_short=allow_short,
             ),
             use_container_width=True, key="solver_chart",

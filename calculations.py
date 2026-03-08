@@ -637,19 +637,21 @@ def rho_mvp_sd(sd1, sd2, rho, allow_short=False):
 # 6. PORTFOLIO SOLVER
 # ══════════════════════════════════════════════════════════════════════════════
 
-def solve_portfolio(frontier_df, objective, goal, constraint, target=None):
+def solve_portfolio(frontier_df, objective, goal, constraint, target=None,
+                    result_filter=None):
     """
     Find the portfolio that minimises, maximises, or hits a target value
     of a given metric within a specified constraint region.
 
     Parameters
     ----------
-    frontier_df : pd.DataFrame  output of build_frontier()
-    objective   : str  'ret' | 'sd' | 'sharpe'
-    goal        : str  'min' | 'max' | 'target'
-    constraint  : str  'full' | 'long_only' | 'long_A1' | 'short_A1' |
-                       'efficient' | 'dominated'
-    target      : float or None  used only when goal == 'target'
+    frontier_df   : pd.DataFrame  output of build_frontier()
+    objective     : str  'ret' | 'sd' | 'sharpe'
+    goal          : str  'min' | 'max' | 'target'
+    constraint    : str  'full' | 'long_only' | 'long_A1' | 'short_A1'
+    target        : float or None  used only when goal == 'target'
+    result_filter : str or None  'efficient' | 'dominated' — further restrict
+                    the search to a sub-region of the frontier
 
     Returns
     -------
@@ -667,12 +669,13 @@ def solve_portfolio(frontier_df, objective, goal, constraint, target=None):
         df = df[df["weight_region"] == "long_A1"]
     elif constraint == "short_A1":
         df = df[df["weight_region"] == "short_A1"]
-    elif constraint == "efficient":
-        df = df[(df["region"] == "efficient") & (df["weight_region"] == "long_only")]
-    elif constraint == "dominated":
-        df = df[(df["region"] == "dominated") & (df["weight_region"] == "long_only")]
     else:
         return None, False, f"Unknown constraint: {constraint}"
+
+    if result_filter == "efficient":
+        df = df[df["region"] == "efficient"]
+    elif result_filter == "dominated":
+        df = df[df["region"] == "dominated"]
 
     if df.empty:
         return None, False, (
