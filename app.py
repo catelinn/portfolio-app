@@ -1199,11 +1199,12 @@ with tab4:
                 unsafe_allow_html=True,
             )
         with _rc2:
-            _goal_desc = {
-                "min":    f"Minimizing **{sol_objective}**",
-                "max":    f"Maximizing **{sol_objective}**",
-                "target": f"Targeting **{sol_objective} = {sol_target:.2f}**",
-            }[_goal_key]
+            if _goal_key == "target":
+                _goal_desc = f"Targeting **{sol_objective} = {sol_target:.2f}**"
+            elif _goal_key == "min":
+                _goal_desc = f"Minimizing **{sol_objective}**"
+            else:
+                _goal_desc = f"Maximizing **{sol_objective}**"
             st.markdown(
                 f"<div class='eff-region-card'>"
                 f"<div class='eff-region-title'>📐 Solver Summary</div>"
