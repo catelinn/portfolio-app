@@ -773,11 +773,11 @@ with tab2:
         else ""
     )
     st.markdown(
-        f"<small>{_note1}<br>"
+        f"<small>{_note4}<br>"
         "• Asset markers (100% A1, 0% A2) and (0% A1, 100% A2) are ρ-invariant — "
         "all frontier curves share the same endpoints — because "
         f"σₚ = √(w₁²σ₁² + w₂²σ₂² + 2w₁w₂ρσ₁σ₂); when w₁=0 → σₚ=σ₂, when w₂=0 → σₚ=σ₁<br>"
-        f"{_note1}</small>",
+        f"{_note4}</small>",
         unsafe_allow_html=True,
     )
 
