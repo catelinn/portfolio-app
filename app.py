@@ -1191,7 +1191,12 @@ with tab4:
         _solver_results.append((_rr, _feas, _msg, _rf_label))
 
     # ── RESULT DISPLAY ────────────────────────────────────────────────────────
-    st.markdown("#### Result")
+    _result_heading = {
+        "Efficient Region Only": "Result (Efficient Frontier)",
+        "Dominated Only":        "Result (Denominated)",
+        "Both":                  "Result",
+    }[sol_result_display]
+    st.markdown(f"#### {_result_heading}")
 
     _feasible_results = [r for r in _solver_results if r[1]]
     if not _feasible_results:
