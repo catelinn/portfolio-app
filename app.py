@@ -9,6 +9,7 @@ Run with: streamlit run app.py
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 from calculations import (
     build_frontier, build_cal, build_rho_frontiers,
@@ -17,6 +18,11 @@ from calculations import (
     frontier_summary_table, cal_summary_table,
     rho_mvp_table, rho_msp_table, cal_equation_str, rho_mvp_sd,
     solve_portfolio,
+    # N-asset
+    build_n_frontier, n_find_mvp, n_find_max_sharpe,
+    build_n_kappa_frontiers, n_solve_portfolio,
+    validate_corr_matrix, nearest_psd_corr, parse_n_csv,
+    n_portfolio_stats,
 )
 from charts import (
     chart_frontier_all,
@@ -33,6 +39,10 @@ from charts import (
     chart_frontier_summary_table,
     chart_cal_summary_table,
     chart_frontier_with_solver,
+    # N-asset
+    chart_n_frontier, chart_n_weights_bar, chart_n_heatmap,
+    chart_n_kappa_effect, chart_n_kappa_mvp_table,
+    chart_n_solver, chart_n_summary_table,
 )
 
 
@@ -193,6 +203,40 @@ for key, val in DEFAULTS.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
+# ── N-Asset defaults ───────────────────────────────────────────────────────────
+_N_ASSET_DEFS = [
+    ("Asset A",  8.0, 15.0),
+    ("Asset B", 12.0, 25.0),
+    ("Asset C",  6.0, 10.0),
+    ("Asset D", 10.0, 20.0),
+    ("Asset E", 14.0, 30.0),
+    ("Asset F",  9.0, 18.0),
+    ("Asset G", 11.0, 22.0),
+    ("Asset H",  7.0, 12.0),
+]
+
+N_DEFAULTS: dict = {
+    "n_n_assets":          3,
+    "n_rf":                3.0,
+    "n_kappa":             1.0,
+    "n_csv_active":        False,
+    "n_sol_objective":     "Expected Return",
+    "n_sol_goal":          "Maximize",
+    "n_sol_target":        10.0,
+    "n_sol_efficient_only": True,
+}
+for _i, (_name, _ret, _sd) in enumerate(_N_ASSET_DEFS):
+    N_DEFAULTS[f"n_name_{_i}"] = _name
+    N_DEFAULTS[f"n_ret_{_i}"]  = _ret
+    N_DEFAULTS[f"n_sd_{_i}"]   = _sd
+for _i in range(8):
+    for _j in range(_i + 1, 8):
+        N_DEFAULTS[f"n_corr_{_i}_{_j}"] = 0.3
+
+for key, val in N_DEFAULTS.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
+
 
 def apply_preset(preset):
     """Store preset values under pending_ keys — sliders pick them up on next rerun."""
@@ -325,6 +369,72 @@ def compute_rho():
         msp_points    = msp_points,
         f_r1=r1, f_sd1=sd1, f_r2=r2, f_sd2=sd2, f_rho=rho, f_rf=rf,
     )
+
+
+# ── N-Asset helpers ────────────────────────────────────────────────────────────
+
+def _n_get_params():
+    """Read current N-asset parameters from session state."""
+    if st.session_state.get("n_csv_active", False):
+        names = st.session_state.n_csv_names
+        mu    = np.array(st.session_state.n_csv_mu,   dtype=float)
+        sd    = np.array(st.session_state.n_csv_sd,   dtype=float)
+        corr  = np.array(st.session_state.n_csv_corr, dtype=float)
+    else:
+        n     = int(st.session_state.n_n_assets)
+        names = [st.session_state.get(f"n_name_{i}", f"Asset {chr(65+i)}")
+                 for i in range(n)]
+        mu    = np.array([st.session_state.get(f"n_ret_{i}", 10.0)
+                          for i in range(n)], dtype=float)
+        sd    = np.array([st.session_state.get(f"n_sd_{i}",  20.0)
+                          for i in range(n)], dtype=float)
+        corr  = np.eye(n)
+        for i in range(n):
+            for j in range(i + 1, n):
+                v = float(st.session_state.get(f"n_corr_{i}_{j}", 0.3))
+                corr[i, j] = v
+                corr[j, i] = v
+    cov = np.diag(sd) @ corr @ np.diag(sd)
+    rf  = float(st.session_state.get("n_rf", 3.0))
+    return names, mu, sd, corr, cov, rf
+
+
+@st.cache_data(show_spinner="Computing N-asset efficient frontier …")
+def _cached_n_frontier(mu_t, cov_t, rf, allow_short):
+    """Cache-friendly wrapper around build_n_frontier (uses tuples as keys)."""
+    mu  = np.array(mu_t,  dtype=float)
+    cov = np.array(cov_t, dtype=float)
+    df  = build_n_frontier(mu, cov, rf, allow_short=allow_short, n_points=150)
+    if df.empty:
+        return None, None, None
+    mvp    = n_find_mvp(df)
+    max_sr = n_find_max_sharpe(df)
+    return df, mvp, max_sr
+
+
+@st.cache_data(show_spinner="Computing correlation-effect frontiers …")
+def _cached_n_kappa(mu_t, sd_t, corr_t, rf, allow_short):
+    """Cache-friendly wrapper around build_n_kappa_frontiers."""
+    mu   = np.array(mu_t,   dtype=float)
+    sd   = np.array(sd_t,   dtype=float)
+    corr = np.array(corr_t, dtype=float)
+    kf   = build_n_kappa_frontiers(mu, sd, corr, rf,
+                                   allow_short=allow_short, n_points=80)
+    mvp_pts = {k: n_find_mvp(df) for k, df in kf.items() if not df.empty}
+    return kf, mvp_pts
+
+
+def _n_template_csv(n, names=None):
+    """Generate a CSV template string for N assets."""
+    if names is None:
+        names = [f"Asset {chr(65+i)}" for i in range(n)]
+    rows = []
+    for i, name in enumerate(names):
+        row = {"name": name, "return_pct": 10.0, "sd_pct": 20.0}
+        for j, n2 in enumerate(names):
+            row[f"corr_{n2}"] = 1.0 if i == j else 0.3
+        rows.append(row)
+    return pd.DataFrame(rows).to_csv(index=False)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1171,4 +1281,476 @@ with tab_two:
 # OUTER TAB — N-ASSET PORTFOLIO
 # ────────────────────────────────────────────────────────────────────────────
 with tab_n:
-    st.info("🚧 N-Asset Portfolio analysis — coming soon.", icon="🚧")
+
+    _N_SUB_OPTS = [
+        "📋  Assets",
+        "📉  Efficient Frontier",
+        "🎯  Solver",
+        "🔗  Correlation Effect",
+    ]
+    _n_sub = st.segmented_control(
+        "N-Asset Section",
+        _N_SUB_OPTS,
+        default=_N_SUB_OPTS[0],
+        key="n_sub_tab",
+        label_visibility="collapsed",
+    )
+
+    # ════════════════════════════════════════════════════════════════════════
+    # SUB-TAB 1 — ASSETS
+    # ════════════════════════════════════════════════════════════════════════
+    if _n_sub == _N_SUB_OPTS[0]:
+
+        # ── CSV upload (always shown at top) ─────────────────────────────
+        st.markdown("<div class='param-banner'>📂 CSV Upload (optional — supports any number of assets)</div>",
+                    unsafe_allow_html=True)
+        with st.expander("Upload Asset Parameters CSV", expanded=False):
+            _csv_c1, _csv_c2 = st.columns([3, 1])
+            with _csv_c1:
+                _uploaded = st.file_uploader(
+                    "CSV with columns: name, return_pct, sd_pct, corr_<name1>, corr_<name2>, …",
+                    type=["csv"], key="n_csv_upload",
+                )
+            with _csv_c2:
+                st.markdown("**Template**")
+                _n_cur = int(st.session_state.n_n_assets)
+                _tpl   = _n_template_csv(_n_cur)
+                st.download_button(
+                    "⬇ Download Template",
+                    data=_tpl,
+                    file_name="n_asset_template.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+
+            if _uploaded is not None:
+                import io
+                _raw_df = pd.read_csv(io.StringIO(_uploaded.getvalue().decode("utf-8")))
+                _csv_names, _csv_mu, _csv_sd, _csv_corr, _csv_errs = parse_n_csv(_raw_df)
+                if _csv_errs and _csv_names is None:
+                    for _e in _csv_errs:
+                        st.error(_e)
+                else:
+                    if _csv_errs:
+                        for _e in _csv_errs:
+                            st.warning(_e)
+                    st.session_state.n_csv_names  = _csv_names
+                    st.session_state.n_csv_mu     = _csv_mu.tolist()
+                    st.session_state.n_csv_sd     = _csv_sd.tolist()
+                    st.session_state.n_csv_corr   = _csv_corr.tolist()
+                    st.session_state.n_csv_active = True
+                    st.success(f"✅ Loaded {len(_csv_names)} assets from CSV.")
+
+            if st.session_state.get("n_csv_active", False):
+                if st.button("✖ Clear CSV — switch to manual entry"):
+                    st.session_state.n_csv_active = False
+                    st.rerun()
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # ── Manual entry ──────────────────────────────────────────────────
+        if st.session_state.get("n_csv_active", False):
+            _csv_names_disp = st.session_state.n_csv_names
+            st.markdown(
+                f"<div class='info-box'>"
+                f"📂 <b>CSV mode active — {len(_csv_names_disp)} assets loaded.</b> "
+                "Switch to manual entry using the button above."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+            _nc, _rf_col = st.columns([3, 1])
+            with _rf_col:
+                st.number_input("Risk-Free Rate (%)", 0.0, 15.0,
+                                float(st.session_state.n_rf), 0.5, key="n_rf")
+            # Preview
+            _prev_df = pd.DataFrame({
+                "Asset":          _csv_names_disp,
+                "Exp. Return (%)": st.session_state.n_csv_mu,
+                "Std. Dev. (%)":   st.session_state.n_csv_sd,
+            })
+            st.dataframe(_prev_df, use_container_width=True, hide_index=True)
+            st.plotly_chart(
+                chart_n_heatmap(st.session_state.n_csv_corr, _csv_names_disp),
+                use_container_width=True, key="n_corr_heatmap_csv",
+            )
+
+        else:
+            # Number of assets + RF rate
+            _na_c1, _na_c2 = st.columns([3, 1])
+            with _na_c1:
+                _n_assets = st.slider(
+                    "Number of Assets", 2, 8,
+                    int(st.session_state.n_n_assets), 1,
+                    key="n_n_assets",
+                )
+            with _na_c2:
+                st.number_input(
+                    "Risk-Free Rate (%)", 0.0, 15.0,
+                    float(st.session_state.n_rf), 0.5, key="n_rf",
+                )
+
+            _n = int(st.session_state.n_n_assets)
+
+            # Asset parameter inputs (up to 4 columns per row)
+            st.markdown("#### Asset Parameters")
+            _CPR   = min(_n, 4)
+            _acols = st.columns(_CPR)
+            for _i in range(_n):
+                with _acols[_i % _CPR]:
+                    _letter = chr(65 + _i)
+                    st.text_input(
+                        f"Name {_letter}",
+                        value=st.session_state.get(f"n_name_{_i}", f"Asset {_letter}"),
+                        key=f"n_name_{_i}",
+                    )
+                    st.number_input(
+                        f"Return (%) {_letter}", 0.0, 50.0,
+                        float(st.session_state.get(f"n_ret_{_i}", 10.0)),
+                        0.5, key=f"n_ret_{_i}",
+                    )
+                    st.number_input(
+                        f"Std. Dev. (%) {_letter}", 1.0, 80.0,
+                        float(st.session_state.get(f"n_sd_{_i}", 20.0)),
+                        1.0, key=f"n_sd_{_i}",
+                    )
+
+            # Correlation matrix editor
+            st.markdown("#### Correlation Matrix")
+            st.caption(
+                "Edit any cell — the matrix is automatically symmetrised. "
+                "Diagonal is fixed at 1.0."
+            )
+
+            _cur_names = [
+                st.session_state.get(f"n_name_{i}", f"Asset {chr(65+i)}")
+                for i in range(_n)
+            ]
+            _corr_init = {}
+            for _j in range(_n):
+                _col_data = []
+                for _i in range(_n):
+                    if _i == _j:
+                        _col_data.append(1.0)
+                    elif _i < _j:
+                        _col_data.append(
+                            float(st.session_state.get(f"n_corr_{_i}_{_j}", 0.3))
+                        )
+                    else:
+                        _col_data.append(
+                            float(st.session_state.get(f"n_corr_{_j}_{_i}", 0.3))
+                        )
+                _corr_init[_cur_names[_j]] = _col_data
+
+            _corr_df_in = pd.DataFrame(_corr_init, index=_cur_names)
+            _edited = st.data_editor(
+                _corr_df_in,
+                use_container_width=True,
+                key=f"n_corr_editor_{_n}",
+            )
+
+            # Post-process: symmetrise, clamp, force diagonal = 1
+            _arr = _edited.values.astype(float)
+            _arr = (_arr + _arr.T) / 2.0
+            np.fill_diagonal(_arr, 1.0)
+            _arr = np.clip(_arr, -1.0, 1.0)
+
+            _is_valid, _corr_errs = validate_corr_matrix(_arr)
+            if not _is_valid:
+                for _e in _corr_errs:
+                    st.warning(f"⚠️ {_e}")
+                _arr = nearest_psd_corr(_arr)
+                st.info(
+                    "ℹ️ Correlation matrix adjusted to the nearest valid "
+                    "positive semi-definite matrix."
+                )
+
+            # Persist back to session state
+            for _i in range(_n):
+                for _j in range(_i + 1, _n):
+                    st.session_state[f"n_corr_{_i}_{_j}"] = round(
+                        float(_arr[_i, _j]), 3
+                    )
+
+            # Live heatmap preview
+            st.plotly_chart(
+                chart_n_heatmap(_arr, _cur_names),
+                use_container_width=True, key="n_corr_heatmap_manual",
+            )
+
+    # ════════════════════════════════════════════════════════════════════════
+    # SUB-TAB 2 — EFFICIENT FRONTIER
+    # ════════════════════════════════════════════════════════════════════════
+    elif _n_sub == _N_SUB_OPTS[1]:
+
+        _n_names, _n_mu, _n_sd, _n_corr, _n_cov, _n_rf = _n_get_params()
+        _short = st.session_state.allow_short
+
+        # Cache keys (convert arrays to tuples for hashing)
+        _mu_t  = tuple(_n_mu.tolist())
+        _cov_t = tuple(map(tuple, _n_cov.tolist()))
+
+        _n_frontier_df, _n_mvp, _n_max_sr = _cached_n_frontier(
+            _mu_t, _cov_t, _n_rf, _short
+        )
+
+        if _n_frontier_df is None or _n_frontier_df.empty:
+            st.error(
+                "❌ Could not compute the efficient frontier for the current parameters. "
+                "Try adjusting asset parameters or the correlation matrix."
+            )
+        else:
+            # ── Metric cards ──────────────────────────────────────────────
+            st.markdown("#### Key Portfolio Statistics")
+            _mk_cols = st.columns(3)
+            with _mk_cols[0]:
+                st.metric("MVP — Std. Dev.", f"{_n_mvp['sd']:.2f}%")
+                st.metric("MVP — Exp. Return", f"{_n_mvp['ret']:.2f}%")
+                st.metric("MVP — Sharpe", f"{_n_mvp['sharpe']:.3f}")
+            with _mk_cols[1]:
+                st.metric("Max Sharpe — Std. Dev.", f"{_n_max_sr['sd']:.2f}%")
+                st.metric("Max Sharpe — Exp. Return", f"{_n_max_sr['ret']:.2f}%")
+                st.metric("Max Sharpe — Sharpe", f"{_n_max_sr['sharpe']:.3f}")
+            with _mk_cols[2]:
+                st.metric("Assets", str(len(_n_names)))
+                st.metric("Risk-Free Rate", f"{_n_rf:.1f}%")
+                st.metric("Short-Selling",
+                          "Enabled" if _short else "Disabled")
+
+            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+            # ── Frontier chart ────────────────────────────────────────────
+            st.markdown("#### Efficient Frontier")
+            st.plotly_chart(
+                chart_n_frontier(_n_frontier_df, _n_names, _n_mvp, _n_max_sr),
+                use_container_width=True, key="n_frontier_chart",
+            )
+
+            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+            # ── Weight allocation bar chart ───────────────────────────────
+            st.markdown("#### Weight Allocations — Key Portfolios")
+            _port_list = [("MVP", _n_mvp), ("Max Sharpe", _n_max_sr)]
+            for _i, _nm in enumerate(_n_names):
+                _wcol = f"w_{_i+1}"
+                _ep   = _n_frontier_df[
+                    (_n_frontier_df[_wcol] > 0.97) &
+                    (_n_frontier_df[_wcol] < 1.03)
+                ]
+                if not _ep.empty:
+                    _port_list.append(
+                        (f"100% {_nm}",
+                         _ep.iloc[(_ep[_wcol] - 1.0).abs().argsort().iloc[0]])
+                    )
+            st.plotly_chart(
+                chart_n_weights_bar(_port_list, _n_names),
+                use_container_width=True, key="n_weights_bar",
+            )
+
+            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+            # ── Summary table ─────────────────────────────────────────────
+            st.markdown("#### Summary Table")
+            st.plotly_chart(
+                chart_n_summary_table(_n_frontier_df, _n_names, _n_mvp, _n_max_sr),
+                use_container_width=True, key="n_summary_table",
+            )
+
+    # ════════════════════════════════════════════════════════════════════════
+    # SUB-TAB 3 — SOLVER
+    # ════════════════════════════════════════════════════════════════════════
+    elif _n_sub == _N_SUB_OPTS[2]:
+
+        _n_names, _n_mu, _n_sd, _n_corr, _n_cov, _n_rf = _n_get_params()
+        _short = st.session_state.allow_short
+        _mu_t  = tuple(_n_mu.tolist())
+        _cov_t = tuple(map(tuple, _n_cov.tolist()))
+
+        _n_frontier_df, _n_mvp, _n_max_sr = _cached_n_frontier(
+            _mu_t, _cov_t, _n_rf, _short
+        )
+
+        if _n_frontier_df is None or _n_frontier_df.empty:
+            st.error("❌ No frontier available. Check the Assets tab.")
+        else:
+            # ── Solver controls ───────────────────────────────────────────
+            st.markdown("<div class='param-banner'>🎯 Solver Settings</div>",
+                        unsafe_allow_html=True)
+            with st.expander("🎯 Solver Settings", expanded=True):
+                _sc1, _sc2, _sc3 = st.columns(3)
+                with _sc1:
+                    _sol_obj = st.selectbox(
+                        "Objective",
+                        ["Expected Return", "Std. Dev.", "Sharpe Ratio"],
+                        index=["Expected Return", "Std. Dev.", "Sharpe Ratio"].index(
+                            st.session_state.n_sol_objective
+                        ),
+                        key="n_sol_objective",
+                    )
+                with _sc2:
+                    _sol_goal = st.selectbox(
+                        "Goal",
+                        ["Maximize", "Minimize", "Target"],
+                        index=["Maximize", "Minimize", "Target"].index(
+                            st.session_state.n_sol_goal
+                        ),
+                        key="n_sol_goal",
+                    )
+                with _sc3:
+                    _sol_target = st.number_input(
+                        "Target Value",
+                        value=float(st.session_state.n_sol_target),
+                        step=0.5,
+                        key="n_sol_target",
+                        disabled=(st.session_state.n_sol_goal != "Target"),
+                    )
+
+                _sol_eff_only = st.checkbox(
+                    "Restrict search to efficient portfolios only",
+                    value=bool(st.session_state.n_sol_efficient_only),
+                    key="n_sol_efficient_only",
+                )
+
+            # Map UI labels to internal keys
+            _obj_map  = {
+                "Expected Return": "ret",
+                "Std. Dev.":       "sd",
+                "Sharpe Ratio":    "sharpe",
+            }
+            _goal_map = {"Maximize": "max", "Minimize": "min", "Target": "target"}
+            _obj_key  = _obj_map[st.session_state.n_sol_objective]
+            _goal_key = _goal_map[st.session_state.n_sol_goal]
+            _target   = (float(st.session_state.n_sol_target)
+                         if _goal_key == "target" else None)
+
+            _sol_row, _feasible, _sol_msg = n_solve_portfolio(
+                _n_frontier_df,
+                objective=_obj_key,
+                goal=_goal_key,
+                target=_target,
+                efficient_only=bool(st.session_state.n_sol_efficient_only),
+            )
+
+            # ── Result ────────────────────────────────────────────────────
+            if _feasible and _sol_row is not None:
+                st.success(_sol_msg)
+                _r_cols = st.columns(3)
+                with _r_cols[0]:
+                    st.metric("Exp. Return", f"{_sol_row['ret']:.2f}%")
+                with _r_cols[1]:
+                    st.metric("Std. Dev.", f"{_sol_row['sd']:.2f}%")
+                with _r_cols[2]:
+                    st.metric("Sharpe Ratio", f"{_sol_row['sharpe']:.3f}")
+
+                # Weight cards
+                st.markdown("**Optimal Weights**")
+                _wc = st.columns(len(_n_names))
+                for _i, _nm in enumerate(_n_names):
+                    with _wc[_i]:
+                        _wval = _sol_row[f"w_{_i+1}"] * 100
+                        st.metric(_nm, f"{_wval:.1f}%")
+
+                # Weight bar chart
+                st.plotly_chart(
+                    chart_n_weights_bar([("Optimal", _sol_row)], _n_names),
+                    use_container_width=True, key="n_solver_weights",
+                )
+            else:
+                st.warning(_sol_msg)
+                _sol_row = None
+
+            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+            # ── Frontier chart with result ─────────────────────────────────
+            st.markdown("#### Frontier Chart — Solver Result")
+            st.plotly_chart(
+                chart_n_solver(_n_frontier_df, _sol_row, _n_mvp, _n_names),
+                use_container_width=True, key="n_solver_chart",
+            )
+
+    # ════════════════════════════════════════════════════════════════════════
+    # SUB-TAB 4 — CORRELATION EFFECT
+    # ════════════════════════════════════════════════════════════════════════
+    elif _n_sub == _N_SUB_OPTS[3]:
+
+        _n_names, _n_mu, _n_sd, _n_corr, _n_cov, _n_rf = _n_get_params()
+        _short = st.session_state.allow_short
+
+        # ── Correlation heatmap ───────────────────────────────────────────
+        st.markdown("#### Current Correlation Matrix")
+        st.plotly_chart(
+            chart_n_heatmap(_n_corr, _n_names),
+            use_container_width=True, key="n_kappa_heatmap",
+        )
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # ── Kappa slider ──────────────────────────────────────────────────
+        st.markdown("#### Correlation Scalar (κ) Effect")
+        st.markdown(
+            "<div class='info-box'>"
+            "ℹ️ <b>κ scales all pairwise correlations.</b> "
+            "At κ = 0 all assets are uncorrelated (diagonal covariance). "
+            "At κ = 1 the full correlation matrix above is used. "
+            "Watch how diversification benefits shrink as κ increases."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        _kappa = st.slider(
+            "Correlation Scalar κ",
+            0.0, 1.0,
+            float(st.session_state.n_kappa),
+            0.05,
+            key="n_kappa",
+            help="κ = 0 → uncorrelated  |  κ = 1 → full correlation",
+        )
+
+        # Cache keys
+        _mu_t   = tuple(_n_mu.tolist())
+        _sd_t   = tuple(_n_sd.tolist())
+        _corr_t = tuple(map(tuple, _n_corr.tolist()))
+
+        _kappa_frs, _kappa_mvps = _cached_n_kappa(
+            _mu_t, _sd_t, _corr_t, _n_rf, _short
+        )
+
+        # Diversification benefit metrics
+        _mvp_full = _kappa_mvps.get(1.0)
+        _mvp_zero = _kappa_mvps.get(0.0)
+        if _mvp_full is not None and _mvp_zero is not None:
+            _div_benefit = _mvp_zero["sd"] - _mvp_full["sd"]
+            _div_pct     = (
+                (_mvp_zero["sd"] - _mvp_full["sd"]) / _mvp_zero["sd"] * 100
+                if _mvp_zero["sd"] > 0 else 0
+            )
+            _mb_cols = st.columns(3)
+            with _mb_cols[0]:
+                st.metric("MVP Std. Dev. (κ=0, uncorrelated)",
+                          f"{_mvp_zero['sd']:.2f}%")
+            with _mb_cols[1]:
+                st.metric("MVP Std. Dev. (κ=1, full correlation)",
+                          f"{_mvp_full['sd']:.2f}%")
+            with _mb_cols[2]:
+                st.metric(
+                    "Diversification Benefit",
+                    f"{_div_benefit:.2f}%",
+                    delta=f"{_div_pct:.1f}% reduction",
+                    delta_color="inverse",
+                )
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # ── Overlaid frontiers chart ──────────────────────────────────────
+        st.markdown("#### Efficient Frontiers Across κ Values")
+        st.plotly_chart(
+            chart_n_kappa_effect(_kappa_frs, _kappa, _kappa_mvps),
+            use_container_width=True, key="n_kappa_chart",
+        )
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # ── MVP comparison table ──────────────────────────────────────────
+        st.markdown("#### MVP Comparison Across κ Values")
+        st.plotly_chart(
+            chart_n_kappa_mvp_table(_kappa_frs, _kappa_mvps, _kappa),
+            use_container_width=True, key="n_kappa_mvp_table",
+        )
