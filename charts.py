@@ -908,6 +908,7 @@ def chart_rho_mvp_table(rho_mvp_df):
             x=0, xanchor="left",
         ),
         margin=dict(t=60, b=20, l=0, r=0),
+        height=280,
         paper_bgcolor=COLORS["white"],
     )
     return fig
@@ -959,6 +960,7 @@ def chart_rho_msp_table(rho_msp_df):
             x=0, xanchor="left",
         ),
         margin=dict(t=60, b=20, l=0, r=0),
+        height=280,
         paper_bgcolor=COLORS["white"],
     )
     return fig
