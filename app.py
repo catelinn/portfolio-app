@@ -1174,8 +1174,7 @@ with tab4:
     if not feasible4:
         st.error(f"⚠️ Infeasible: {message4}")
     else:
-        _rc1, _rc2 = st.columns([1, 2])
-        with _rc1:
+        with st.container():
             _goal_label = {
                 "min":    f"Min {sol_objective}",
                 "max":    f"Max {sol_objective}",
@@ -1196,28 +1195,6 @@ with tab4:
                 f"<span class='opt-card-value'>{result_row4['sharpe']:.3f}</span></div>"
                 f"<div style='margin-top:8px;font-size:0.78rem;color:#595959'>{message4}</div>"
                 f"</div>",
-                unsafe_allow_html=True,
-            )
-        with _rc2:
-            if _goal_key == "target":
-                _goal_desc = f"Targeting **{sol_objective} = {sol_target:.2f}**"
-            elif _goal_key == "min":
-                _goal_desc = f"Minimizing **{sol_objective}**"
-            else:
-                _goal_desc = f"Maximizing **{sol_objective}**"
-            st.markdown(
-                f"<div class='eff-region-card'>"
-                f"<div class='eff-region-title'>📐 Solver Summary</div>"
-                f"<div style='font-size:0.84rem;'>"
-                f"<b>Objective:</b> {_goal_desc}<br>"
-                f"<b>Constraint region:</b> {sol_constraint}<br>"
-                f"<b>Allocation:</b> "
-                f"{result_row4['w_A1']*100:.1f}% Asset 1 / "
-                f"{result_row4['w_A2']*100:.1f}% Asset 2<br>"
-                f"<b>Result:</b> E[R] = {result_row4['ret']:.2f}%  |  "
-                f"σ = {result_row4['sd']:.2f}%  |  "
-                f"Sharpe = {result_row4['sharpe']:.3f}"
-                f"</div></div>",
                 unsafe_allow_html=True,
             )
 
