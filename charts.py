@@ -1109,7 +1109,7 @@ def chart_frontier_with_solver(frontier_df, result_rows, constraint, mvp, allow_
     for _rr, _rl in (result_rows or []):
         if _rr is None:
             continue
-        _color = _star_color.get(_rl, "#FF8C00")
+        _color = _star_color["Dominated Region"] if "Dominated Region" in _rl else _star_color["Efficient Region"]
         fig.add_trace(go.Scatter(
             x=[_rr["sd"]], y=[_rr["ret"]],
             mode="markers+text",
