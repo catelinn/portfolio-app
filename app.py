@@ -671,7 +671,6 @@ with tab2:
             "<div class='info-box'>"
             "ℹ️ Correlation frontiers are displayed as long-only "
             "(Asset 1 & Asset 2 Weights: 0% → 100%). "
-            "This is consistent with how Prof. Weisbenner presents correlation effects in Lesson 1-5. "
             "Enable short-selling in the sidebar to see how unconstrained MVP weights change across correlations."
             "</div>",
             unsafe_allow_html=True,
