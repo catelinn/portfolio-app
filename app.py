@@ -761,11 +761,19 @@ with tab2:
         if allow_short
         else "• Long-only portfolios (Asset 1 & Asset 2 Weights: 0% → 100%)"
     )
+    _note2 = (
+        "• Beyond 100% A2 (short A1, w_A1 &lt; 0): correlation effect <b>reverses</b> — "
+        "higher ρ reduces variance here, lower ρ increases it. "
+        "Reason: w_A1 &lt; 0 flips the sign of the covariance term (2·w_A1·w_A2·ρ·σ₁σ₂).<br>"
+        if allow_short
+        else ""
+    )
     st.markdown(
         f"<small>{_note1}<br>"
         "• Asset markers (100% A1, 0% A2) and (0% A1, 100% A2) are ρ-invariant — "
         "all frontier curves share the same endpoints — because "
-        "σₚ = √(w₁²σ₁² + w₂²σ₂² + 2w₁w₂ρσ₁σ₂); when w₁=0 → σₚ=σ₂, when w₂=0 → σₚ=σ₁</small>",
+        f"σₚ = √(w₁²σ₁² + w₂²σ₂² + 2w₁w₂ρσ₁σ₂); when w₁=0 → σₚ=σ₂, when w₂=0 → σₚ=σ₁<br>"
+        f"{_note2}</small>",
         unsafe_allow_html=True,
     )
 
