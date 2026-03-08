@@ -772,7 +772,7 @@ with tab2:
         if allow_short
         else ""
     )
-     _note4 = (
+    _note4 = (
         "• Asset markers (100% A1, 0% A2) and (0% A1, 100% A2) are ρ-invariant — "
         "all frontier curves share the same endpoints — because "
         f"σₚ = √(w₁²σ₁² + w₂²σ₂² + 2w₁w₂ρσ₁σ₂); when w₁=0 → σₚ=σ₂, when w₂=0 → σₚ=σ₁<br>"
