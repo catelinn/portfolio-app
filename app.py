@@ -16,6 +16,7 @@ from calculations import (
     efficient_frontier_region, benchmark_stats,
     frontier_summary_table, cal_summary_table,
     rho_mvp_table, rho_msp_table, cal_equation_str, rho_mvp_sd,
+    solve_portfolio,
 )
 from charts import (
     chart_frontier_all,
@@ -31,6 +32,7 @@ from charts import (
     chart_rho_msp_table,
     chart_frontier_summary_table,
     chart_cal_summary_table,
+    chart_frontier_with_solver,
 )
 
 
@@ -179,6 +181,11 @@ DEFAULTS = dict(
     f_rho=0.4, f_rf=3.0,
     c_r_risky=8.0, c_sd_risky=25.0, c_rf=3.0,
     allow_short=False,
+    # Solver defaults
+    sol_objective="Expected Return",
+    sol_goal="Maximize",
+    sol_constraint="Efficient Frontier Only",
+    sol_target=10.0,
 )
 
 for key, val in DEFAULTS.items():
@@ -339,10 +346,11 @@ st.markdown(
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
 
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "📊  Portfolio Frontier (Two Risky Assets)",
     "🔗  Correlation Effect (Two Risky Assets)",
     "📈  Capital Allocation Line (One Free Risk, One Risky)",
+    "🎯  Portfolio Solver",
 ])
 
 
@@ -1008,3 +1016,217 @@ with tab3:
 
 
 # ────────────────────────────────────────────────────────────────────────────
+# TAB 4 — PORTFOLIO SOLVER
+# ────────────────────────────────────────────────────────────────────────────
+with tab4:
+
+    # ── PARAMETER EXPANDER (read-only — shared from Portfolio Frontier) ───────
+    st.markdown("<div class='param-banner'>⚙️ Parameters — Portfolio Solver &nbsp;·&nbsp; shared with Portfolio Frontier</div>", unsafe_allow_html=True)
+    with st.expander("📌 Current Asset Parameters (shared with Portfolio Frontier)", expanded=False):
+        _f4 = compute_frontier()
+        _p1, _p2, _p3 = st.columns(3)
+        with _p1:
+            st.markdown("**Asset 1**")
+            st.write(f"Exp. Return: **{_f4['f_r1']:.1f}%**")
+            st.write(f"Std. Dev.: **{_f4['f_sd1']:.1f}%**")
+        with _p2:
+            st.markdown("**Asset 2**")
+            st.write(f"Exp. Return: **{_f4['f_r2']:.1f}%**")
+            st.write(f"Std. Dev.: **{_f4['f_sd2']:.1f}%**")
+        with _p3:
+            st.markdown("**Correlation & Risk-Free**")
+            st.write(f"ρ: **{_f4['f_rho']:.2f}**")
+            st.write(f"Risk-Free Rate: **{_f4['f_rf']:.1f}%**")
+        st.caption("Edit these in Tab 1 — Portfolio Frontier.")
+
+    # ── Compute frontier (reuse shared state) ─────────────────────────────────
+    _f4          = compute_frontier()
+    frontier_df4 = _f4["frontier_df"]
+    mvp4         = _f4["mvp"]
+
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+    # ── SOLVER CONFIGURATION ─────────────────────────────────────────────────
+    st.markdown("#### 🎯 Solver Configuration")
+
+    _constraint_options_lo = [
+        "Long Only",
+        "Efficient Frontier Only",
+        "Dominated Assets Only",
+    ]
+    _constraint_options_all = [
+        "Full Curve",
+        "Long Only",
+        "Long Asset 1 / Short Asset 2",
+        "Short Asset 1 / Long Asset 2",
+        "Efficient Frontier Only",
+        "Dominated Assets Only",
+    ]
+    _constraint_options = _constraint_options_all if allow_short else _constraint_options_lo
+
+    if st.session_state.sol_constraint not in _constraint_options:
+        st.session_state.sol_constraint = _constraint_options[0]
+
+    _constraint_key_map = {
+        "Full Curve":                        "full",
+        "Long Only":                         "long_only",
+        "Long Asset 1 / Short Asset 2":      "long_A1",
+        "Short Asset 1 / Long Asset 2":      "short_A1",
+        "Efficient Frontier Only":           "efficient",
+        "Dominated Assets Only":             "dominated",
+    }
+    _objective_key_map = {
+        "Expected Return": "ret",
+        "Std. Dev.":       "sd",
+        "Sharpe Ratio":    "sharpe",
+    }
+    _goal_key_map = {
+        "Minimize":         "min",
+        "Maximize":         "max",
+        "Hit Target Value": "target",
+    }
+
+    sc1, sc2, sc3 = st.columns(3)
+    with sc1:
+        sol_objective = st.radio(
+            "Objective Metric",
+            ["Expected Return", "Std. Dev.", "Sharpe Ratio"],
+            index=["Expected Return", "Std. Dev.", "Sharpe Ratio"].index(
+                st.session_state.sol_objective
+            ),
+            key="sol_objective",
+            help="Which portfolio metric to optimise or target.",
+        )
+    with sc2:
+        sol_goal = st.radio(
+            "Goal",
+            ["Minimize", "Maximize", "Hit Target Value"],
+            index=["Minimize", "Maximize", "Hit Target Value"].index(
+                st.session_state.sol_goal
+            ),
+            key="sol_goal",
+            help="Find the minimum, maximum, or the allocation closest to a specific value.",
+        )
+    with sc3:
+        sol_constraint = st.selectbox(
+            "Constraint Region",
+            _constraint_options,
+            index=_constraint_options.index(st.session_state.sol_constraint),
+            key="sol_constraint",
+            help="Restrict the search to this region of the frontier.",
+        )
+
+    # Target value input — only shown for Hit Target Value
+    sol_target = None
+    if sol_goal == "Hit Target Value":
+        _obj_col = _objective_key_map[sol_objective]
+        _ckey    = _constraint_key_map[sol_constraint]
+        _df_tmp  = frontier_df4.copy()
+        if _ckey == "long_only":
+            _df_tmp = _df_tmp[_df_tmp["weight_region"] == "long_only"]
+        elif _ckey == "long_A1":
+            _df_tmp = _df_tmp[_df_tmp["weight_region"] == "long_A1"]
+        elif _ckey == "short_A1":
+            _df_tmp = _df_tmp[_df_tmp["weight_region"] == "short_A1"]
+        elif _ckey == "efficient":
+            _df_tmp = _df_tmp[(_df_tmp["region"] == "efficient") & (_df_tmp["weight_region"] == "long_only")]
+        elif _ckey == "dominated":
+            _df_tmp = _df_tmp[(_df_tmp["region"] == "dominated") & (_df_tmp["weight_region"] == "long_only")]
+
+        if not _df_tmp.empty:
+            _v_min     = float(_df_tmp[_obj_col].min())
+            _v_max     = float(_df_tmp[_obj_col].max())
+            _v_default = max(_v_min, min(_v_max, float(st.session_state.sol_target)))
+        else:
+            _v_min, _v_max, _v_default = 0.0, 30.0, 10.0
+
+        _unit = "%" if sol_objective in ("Expected Return", "Std. Dev.") else ""
+        sol_target = st.number_input(
+            f"Target {sol_objective}{' (%)' if _unit else ''}",
+            min_value=round(_v_min - abs(_v_min) * 0.5, 2),
+            max_value=round(_v_max + abs(_v_max) * 0.5, 2),
+            value=round(_v_default, 2),
+            step=0.01,
+            format="%.2f",
+            key="sol_target",
+            help=(f"Feasible range in current constraint region: "
+                  f"{_v_min:.2f}{_unit} → {_v_max:.2f}{_unit}"),
+        )
+
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+    # ── RUN SOLVER ────────────────────────────────────────────────────────────
+    _obj_key  = _objective_key_map[sol_objective]
+    _goal_key = _goal_key_map[sol_goal]
+    _con_key  = _constraint_key_map[sol_constraint]
+
+    result_row4, feasible4, message4 = solve_portfolio(
+        frontier_df4,
+        objective  = _obj_key,
+        goal       = _goal_key,
+        constraint = _con_key,
+        target     = sol_target,
+    )
+
+    # ── RESULT DISPLAY ────────────────────────────────────────────────────────
+    st.markdown("#### Result")
+
+    if not feasible4:
+        st.error(f"⚠️ Infeasible: {message4}")
+    else:
+        _rc1, _rc2 = st.columns([1, 2])
+        with _rc1:
+            _goal_label = {
+                "min":    f"Min {sol_objective}",
+                "max":    f"Max {sol_objective}",
+                "target": f"Target {sol_objective}",
+            }[_goal_key]
+            st.markdown(
+                f"<div class='opt-card'>"
+                f"<div class='opt-card-title'>🎯 {_goal_label} — {sol_constraint}</div>"
+                f"<div class='opt-card-row'><span>Asset 1 Weight</span>"
+                f"<span class='opt-card-value'>{result_row4['w_A1']*100:.1f}%</span></div>"
+                f"<div class='opt-card-row'><span>Asset 2 Weight</span>"
+                f"<span class='opt-card-value'>{result_row4['w_A2']*100:.1f}%</span></div>"
+                f"<div class='opt-card-row'><span>Exp. Return</span>"
+                f"<span class='opt-card-value'>{result_row4['ret']:.2f}%</span></div>"
+                f"<div class='opt-card-row'><span>Std. Dev.</span>"
+                f"<span class='opt-card-value'>{result_row4['sd']:.2f}%</span></div>"
+                f"<div class='opt-card-row'><span>Sharpe Ratio</span>"
+                f"<span class='opt-card-value'>{result_row4['sharpe']:.3f}</span></div>"
+                f"<div style='margin-top:8px;font-size:0.78rem;color:#595959'>{message4}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        with _rc2:
+            _goal_desc = {
+                "min":    f"Minimizing **{sol_objective}**",
+                "max":    f"Maximizing **{sol_objective}**",
+                "target": f"Targeting **{sol_objective} = {sol_target:.2f}**",
+            }[_goal_key]
+            st.markdown(
+                f"<div class='eff-region-card'>"
+                f"<div class='eff-region-title'>📐 Solver Summary</div>"
+                f"<div style='font-size:0.84rem;'>"
+                f"<b>Objective:</b> {_goal_desc}<br>"
+                f"<b>Constraint region:</b> {sol_constraint}<br>"
+                f"<b>Allocation:</b> "
+                f"{result_row4['w_A1']*100:.1f}% Asset 1 / "
+                f"{result_row4['w_A2']*100:.1f}% Asset 2<br>"
+                f"<b>Result:</b> E[R] = {result_row4['ret']:.2f}%  |  "
+                f"σ = {result_row4['sd']:.2f}%  |  "
+                f"Sharpe = {result_row4['sharpe']:.3f}"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        st.markdown("#### Frontier Chart — Solver Result")
+        st.plotly_chart(
+            chart_frontier_with_solver(
+                frontier_df4, result_row4, _con_key, mvp4,
+                allow_short=allow_short,
+            ),
+            use_container_width=True, key="solver_chart",
+        )

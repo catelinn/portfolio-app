@@ -631,3 +631,92 @@ def rho_mvp_sd(sd1, sd2, rho, allow_short=False):
                 + (1 - w)**2 * sd2**2
                 + 2 * w * (1 - w) * rho * sd1 * sd2)
     return round(np.sqrt(max(variance, 0.0)), 4)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 6. PORTFOLIO SOLVER
+# ══════════════════════════════════════════════════════════════════════════════
+
+def solve_portfolio(frontier_df, objective, goal, constraint, target=None):
+    """
+    Find the portfolio that minimises, maximises, or hits a target value
+    of a given metric within a specified constraint region.
+
+    Parameters
+    ----------
+    frontier_df : pd.DataFrame  output of build_frontier()
+    objective   : str  'ret' | 'sd' | 'sharpe'
+    goal        : str  'min' | 'max' | 'target'
+    constraint  : str  'full' | 'long_only' | 'long_A1' | 'short_A1' |
+                       'efficient' | 'dominated'
+    target      : float or None  used only when goal == 'target'
+
+    Returns
+    -------
+    result_row : pd.Series or None
+    feasible   : bool
+    message    : str
+    """
+    df = frontier_df.copy()
+
+    if constraint == "full":
+        pass
+    elif constraint == "long_only":
+        df = df[df["weight_region"] == "long_only"]
+    elif constraint == "long_A1":
+        df = df[df["weight_region"] == "long_A1"]
+    elif constraint == "short_A1":
+        df = df[df["weight_region"] == "short_A1"]
+    elif constraint == "efficient":
+        df = df[(df["region"] == "efficient") & (df["weight_region"] == "long_only")]
+    elif constraint == "dominated":
+        df = df[(df["region"] == "dominated") & (df["weight_region"] == "long_only")]
+    else:
+        return None, False, f"Unknown constraint: {constraint}"
+
+    if df.empty:
+        return None, False, (
+            "No portfolios available in the selected constraint region. "
+            "Try enabling short-selling or choosing a different region."
+        )
+
+    obj_labels = {"ret": "Exp. Return", "sd": "Std. Dev.", "sharpe": "Sharpe Ratio"}
+    obj_label  = obj_labels.get(objective, objective)
+
+    if goal == "min":
+        idx        = df[objective].idxmin()
+        result_row = frontier_df.loc[idx]
+        actual     = result_row[objective]
+        message    = f"Minimum {obj_label} = {actual:.4f} within the selected region."
+
+    elif goal == "max":
+        idx        = df[objective].idxmax()
+        result_row = frontier_df.loc[idx]
+        actual     = result_row[objective]
+        message    = f"Maximum {obj_label} = {actual:.4f} within the selected region."
+
+    elif goal == "target":
+        if target is None:
+            return None, False, "A target value is required."
+        diff       = (df[objective] - target).abs()
+        idx        = diff.idxmin()
+        result_row = frontier_df.loc[idx]
+        actual     = result_row[objective]
+        delta      = abs(actual - target)
+        range_min  = df[objective].min()
+        range_max  = df[objective].max()
+        if target < range_min or target > range_max:
+            message = (
+                f"Target {obj_label} = {target:.4f} is outside the constraint region "
+                f"range [{range_min:.4f}, {range_max:.4f}]. "
+                f"Nearest feasible value: {actual:.4f}  (Δ = {delta:.4f})."
+            )
+        else:
+            message = (
+                f"Closest portfolio to {obj_label} = {target:.4f}. "
+                f"Actual: {actual:.4f}  (Δ = {delta:.4f})."
+            )
+    else:
+        return None, False, f"Unknown goal: {goal}"
+
+    return result_row, True, message

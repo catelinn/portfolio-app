@@ -1009,6 +1009,140 @@ def chart_frontier_summary_table(summary_df):
     return fig
 
 
+def chart_frontier_with_solver(frontier_df, result_row, constraint, mvp, allow_short=False):
+    """
+    Tab 4 — Portfolio Solver chart.
+
+    Full frontier drawn as a muted gray background; the active constraint
+    region is overlaid in bold colour; the solver result is marked with a
+    large gold star.
+
+    Parameters
+    ----------
+    frontier_df : pd.DataFrame  full frontier from build_frontier()
+    result_row  : pd.Series     solved portfolio row (None if infeasible)
+    constraint  : str           active constraint key
+    mvp         : pd.Series     Minimum Variance Portfolio row
+    allow_short : bool
+    """
+    fig = go.Figure()
+
+    # ── Background: full frontier in muted light gray ─────────────────────────
+    all_df = frontier_df.sort_values("w_A1")
+    fig.add_trace(go.Scatter(
+        x=all_df["sd"], y=all_df["ret"],
+        mode="lines",
+        name="Full Frontier (background)",
+        line=dict(color="#CCCCCC", width=1.5),
+        hoverinfo="skip",
+        showlegend=True,
+    ))
+
+    # ── Constraint region overlay — colored, bold ─────────────────────────────
+    if constraint == "full":
+        for wr, label, color in [
+            ("long_only", "Long Only",                    COLORS["navy"]),
+            ("short_A1",  "Short A1 / Long A2",           COLORS["amber"]),
+            ("long_A1",   "Long A1 / Short A2",           COLORS["violet"]),
+        ]:
+            df_r = frontier_df[frontier_df["weight_region"] == wr].sort_values("w_A1")
+            if df_r.empty:
+                continue
+            fig.add_trace(go.Scatter(
+                x=df_r["sd"], y=df_r["ret"],
+                mode="lines",
+                name=f"{label} (Constraint)",
+                line=dict(color=color, width=3),
+                customdata=list(zip(
+                    [label] * len(df_r),
+                    df_r["w_A1"] * 100,
+                    df_r["w_A2"] * 100,
+                    df_r["sharpe"],
+                )),
+                hovertemplate=_hover_frontier(),
+            ))
+    else:
+        constraint_styles = {
+            "long_only": (
+                frontier_df[frontier_df["weight_region"] == "long_only"],
+                "Long Only (Constraint)", COLORS["navy"],
+            ),
+            "long_A1": (
+                frontier_df[frontier_df["weight_region"] == "long_A1"],
+                "Long A1 / Short A2 (Constraint)", COLORS["violet"],
+            ),
+            "short_A1": (
+                frontier_df[frontier_df["weight_region"] == "short_A1"],
+                "Short A1 / Long A2 (Constraint)", COLORS["amber"],
+            ),
+            "efficient": (
+                frontier_df[
+                    (frontier_df["region"] == "efficient") &
+                    (frontier_df["weight_region"] == "long_only")
+                ],
+                "Efficient Frontier (Constraint)", COLORS["efficient"],
+            ),
+            "dominated": (
+                frontier_df[
+                    (frontier_df["region"] == "dominated") &
+                    (frontier_df["weight_region"] == "long_only")
+                ],
+                "Dominated Region (Constraint)", COLORS["dominated"],
+            ),
+        }
+        if constraint in constraint_styles:
+            df_c, label_c, color_c = constraint_styles[constraint]
+            df_c = df_c.sort_values("w_A1")
+            if not df_c.empty:
+                fig.add_trace(go.Scatter(
+                    x=df_c["sd"], y=df_c["ret"],
+                    mode="lines",
+                    name=label_c,
+                    line=dict(color=color_c, width=3),
+                    customdata=list(zip(
+                        [label_c] * len(df_c),
+                        df_c["w_A1"] * 100,
+                        df_c["w_A2"] * 100,
+                        df_c["sharpe"],
+                    )),
+                    hovertemplate=_hover_frontier(),
+                ))
+
+    # ── MVP marker (context) ──────────────────────────────────────────────────
+    fig = _add_mvp_marker(fig, mvp)
+
+    # ── Asset endpoint markers ────────────────────────────────────────────────
+    fig = _add_asset_markers(fig, frontier_df)
+
+    # ── Solver result — gold star ─────────────────────────────────────────────
+    if result_row is not None:
+        fig.add_trace(go.Scatter(
+            x=[result_row["sd"]], y=[result_row["ret"]],
+            mode="markers+text",
+            marker=dict(size=18, color="#FF8C00", symbol="star",
+                        line=dict(width=2, color="white")),
+            text=["Solver Result"], textposition="top right",
+            textfont=dict(size=11, color="#FF8C00"),
+            name="Solver Result",
+            customdata=[[
+                "Solver Result",
+                result_row["w_A1"] * 100,
+                result_row["w_A2"] * 100,
+                result_row["sharpe"],
+            ]],
+            hovertemplate=_hover_frontier(),
+            showlegend=True,
+        ))
+
+    fig.update_layout(_base_layout(
+        title="Portfolio Solver — Result on Frontier",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="Highlighted = active constraint region  |  Gold star = solver result",
+    ))
+    return fig
+
+
 def chart_cal_summary_table(cal_summary_df):
     """Render the CAL summary table (bottom of Tab 2) as a Plotly table."""
     n_cols = len(cal_summary_df.columns)
