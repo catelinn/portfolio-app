@@ -1181,3 +1181,514 @@ def chart_cal_summary_table(cal_summary_df):
         paper_bgcolor=COLORS["white"],
     )
     return fig
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# N-ASSET PORTFOLIO CHARTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Per-asset colour palette (up to 8 assets)
+N_ASSET_COLORS = [
+    "#1F4E79",  # navy
+    "#E8A020",  # amber
+    "#1E6B3A",  # green
+    "#C00000",  # red
+    "#7B2D8B",  # violet
+    "#2E75B6",  # blue
+    "#595959",  # gray
+    "#B8860B",  # dark goldenrod
+]
+
+KAPPA_COLORS = {
+    0.0:  "#1F4E79",
+    0.25: "#2E75B6",
+    0.5:  "#1E6B3A",
+    0.75: "#E8A020",
+    1.0:  "#C00000",
+}
+
+
+def chart_n_frontier(frontier_df, asset_names, mvp, max_sr):
+    """
+    N-asset efficient frontier chart.
+
+    Parameters
+    ----------
+    frontier_df : pd.DataFrame  output of build_n_frontier()
+    asset_names : list of str
+    mvp         : pd.Series     MVP row
+    max_sr      : pd.Series     Max Sharpe row
+
+    Returns
+    -------
+    go.Figure
+    """
+    fig    = go.Figure()
+    n      = len(asset_names)
+    w_cols = [f"w_{i+1}" for i in range(n)]
+    eff_df = frontier_df.sort_values("ret")
+
+    def _cd(df, label):
+        out = []
+        for _, row in df.iterrows():
+            wstr = " | ".join(
+                f"{asset_names[i]}: {row[w_cols[i]] * 100:.1f}%"
+                for i in range(n)
+            )
+            out.append([label, wstr, row["sharpe"]])
+        return out
+
+    hover_tpl = (
+        "<b>%{customdata[0]}</b><br>"
+        "%{customdata[1]}<br>"
+        "──────────────────<br>"
+        "Exp. Return: %{y:.2f}%<br>"
+        "Std. Dev.: %{x:.2f}%<br>"
+        "Sharpe Ratio: %{customdata[2]:.3f}"
+        "<extra></extra>"
+    )
+
+    if not eff_df.empty:
+        fig.add_trace(go.Scatter(
+            x=eff_df["sd"], y=eff_df["ret"],
+            mode="lines",
+            name="Efficient Frontier",
+            line=dict(color=COLORS["efficient"], width=3),
+            customdata=_cd(eff_df, "Efficient Frontier"),
+            hovertemplate=hover_tpl,
+        ))
+
+    # Asset endpoint markers
+    for i, name in enumerate(asset_names):
+        col   = w_cols[i]
+        ep_df = frontier_df[(frontier_df[col] > 0.97) &
+                            (frontier_df[col] < 1.03)]
+        if ep_df.empty:
+            continue
+        row   = ep_df.iloc[(ep_df[col] - 1.0).abs().argsort().iloc[0]]
+        color = N_ASSET_COLORS[i % len(N_ASSET_COLORS)]
+        fig.add_trace(go.Scatter(
+            x=[row["sd"]], y=[row["ret"]],
+            mode="markers+text",
+            marker=dict(size=10, color=color, symbol="diamond",
+                        line=dict(width=1, color="white")),
+            text=[f"100% {name}"], textposition="top right",
+            textfont=dict(size=10, color=color),
+            name=f"100% {name}",
+            showlegend=True,
+            hoverinfo="skip",
+        ))
+
+    # MVP
+    fig.add_trace(go.Scatter(
+        x=[mvp["sd"]], y=[mvp["ret"]],
+        mode="markers+text",
+        marker=dict(size=14, color=COLORS["green"], symbol="star",
+                    line=dict(width=1, color="white")),
+        text=["MVP"], textposition="top left",
+        textfont=dict(size=10, color=COLORS["green"]),
+        name="Min. Variance Portfolio",
+        showlegend=True,
+        hoverinfo="skip",
+    ))
+
+    # Max Sharpe
+    fig.add_trace(go.Scatter(
+        x=[max_sr["sd"]], y=[max_sr["ret"]],
+        mode="markers+text",
+        marker=dict(size=14, color=COLORS["blue"], symbol="star-diamond",
+                    line=dict(width=1, color="white")),
+        text=["MSP"], textposition="top right",
+        textfont=dict(size=10, color=COLORS["blue"]),
+        name="Max Sharpe Portfolio",
+        showlegend=True,
+        hoverinfo="skip",
+    ))
+
+    fig.update_layout(_base_layout(
+        title=f"N-Asset Efficient Frontier ({n} Assets)",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="Green = Efficient Frontier  |  Stars = MVP & Max Sharpe Portfolio",
+    ))
+    return fig
+
+
+def chart_n_weights_bar(portfolios, asset_names):
+    """
+    Stacked horizontal bar chart of asset weight allocations.
+
+    Parameters
+    ----------
+    portfolios  : list of (label, pd.Series)
+    asset_names : list of str
+
+    Returns
+    -------
+    go.Figure
+    """
+    fig      = go.Figure()
+    n        = len(asset_names)
+    w_cols   = [f"w_{i+1}" for i in range(n)]
+    p_labels = [p[0] for p in portfolios]
+
+    for i, (name, col) in enumerate(zip(asset_names, w_cols)):
+        weights = [round(float(row[col]) * 100, 2) for _, row in portfolios]
+        color   = N_ASSET_COLORS[i % len(N_ASSET_COLORS)]
+        fig.add_trace(go.Bar(
+            name=name,
+            x=weights,
+            y=p_labels,
+            orientation="h",
+            marker_color=color,
+            text=[f"{w:.1f}%" for w in weights],
+            textposition="inside",
+            insidetextanchor="middle",
+        ))
+
+    fig.update_layout(
+        barmode="relative",
+        title=dict(
+            text="<b>Portfolio Weight Allocations</b>",
+            font=dict(size=14, color=COLORS["navy"]),
+            x=0, xanchor="left",
+        ),
+        xaxis=dict(title="Weight (%)", ticksuffix="%", gridcolor="#E8E8E8"),
+        yaxis=dict(autorange="reversed"),
+        plot_bgcolor=COLORS["white"],
+        paper_bgcolor=COLORS["white"],
+        legend=dict(title="Asset", font=dict(size=11),
+                    bgcolor="rgba(255,255,255,0.85)",
+                    bordercolor="#CCCCCC", borderwidth=1),
+        margin=dict(t=60, b=60, l=150, r=60),
+        height=max(220, 60 + len(portfolios) * 55),
+    )
+    return fig
+
+
+def chart_n_heatmap(corr_matrix, asset_names):
+    """
+    Correlation matrix heatmap.
+
+    Parameters
+    ----------
+    corr_matrix : array-like, shape (N, N)
+    asset_names : list of str
+
+    Returns
+    -------
+    go.Figure
+    """
+    corr = np.asarray(corr_matrix, dtype=float)
+    n    = len(asset_names)
+    text = [[f"{corr[i, j]:.2f}" for j in range(n)] for i in range(n)]
+
+    fig = go.Figure(data=go.Heatmap(
+        z=corr,
+        x=asset_names,
+        y=asset_names,
+        text=text,
+        texttemplate="%{text}",
+        textfont=dict(size=12),
+        colorscale=[
+            [0.0, "#C00000"],
+            [0.5, "#FFFFFF"],
+            [1.0, "#1F4E79"],
+        ],
+        zmin=-1, zmax=1,
+        colorbar=dict(
+            title="ρ",
+            tickvals=[-1, -0.5, 0, 0.5, 1],
+            ticktext=["-1.0", "-0.5", "0.0", "+0.5", "+1.0"],
+        ),
+        hovertemplate=(
+            "<b>%{y} × %{x}</b><br>"
+            "Correlation: %{z:.3f}"
+            "<extra></extra>"
+        ),
+    ))
+
+    fig.update_layout(
+        title=dict(text="<b>Correlation Matrix</b>",
+                   font=dict(size=14, color=COLORS["navy"]),
+                   x=0, xanchor="left"),
+        xaxis=dict(side="bottom", tickfont=dict(size=11)),
+        yaxis=dict(autorange="reversed", tickfont=dict(size=11)),
+        margin=dict(t=60, b=60, l=80, r=60),
+        paper_bgcolor=COLORS["white"],
+        plot_bgcolor=COLORS["white"],
+        height=max(300, 60 + n * 50),
+    )
+    return fig
+
+
+def chart_n_kappa_effect(kappa_frontiers, current_kappa, mvp_points):
+    """
+    Overlaid N-asset frontiers for different correlation scalars κ.
+
+    Parameters
+    ----------
+    kappa_frontiers : dict { κ: pd.DataFrame }
+    current_kappa   : float
+    mvp_points      : dict { κ: pd.Series }
+
+    Returns
+    -------
+    go.Figure
+    """
+    fig = go.Figure()
+    for kappa in sorted(kappa_frontiers.keys()):
+        df     = kappa_frontiers[kappa]
+        color  = KAPPA_COLORS.get(kappa, COLORS["gray"])
+        is_cur = abs(kappa - current_kappa) < 1e-9
+        width  = 3   if is_cur else 1.5
+        opacity= 1.0 if is_cur else 0.55
+        dash   = "solid" if is_cur else "dash"
+        label  = f"κ = {kappa:.2f}"
+
+        if df.empty:
+            continue
+        df_s = df.sort_values("ret")
+        fig.add_trace(go.Scatter(
+            x=df_s["sd"], y=df_s["ret"],
+            mode="lines",
+            name=label,
+            line=dict(color=color, width=width, dash=dash),
+            opacity=opacity,
+            hovertemplate=(
+                f"<b>{label}</b><br>"
+                "Exp. Return: %{y:.2f}%<br>"
+                "Std. Dev.: %{x:.2f}%"
+                "<extra></extra>"
+            ),
+        ))
+
+        mvp = mvp_points.get(kappa)
+        if mvp is not None:
+            fig.add_trace(go.Scatter(
+                x=[mvp["sd"]], y=[mvp["ret"]],
+                mode="markers",
+                marker=dict(size=9 if is_cur else 7,
+                            color=color, symbol="star",
+                            line=dict(width=1, color="white")),
+                name=f"MVP (κ={kappa:.2f})",
+                showlegend=False,
+                hovertemplate=(
+                    f"<b>MVP — {label}</b><br>"
+                    "Std. Dev.: %{x:.2f}%<br>"
+                    "Exp. Return: %{y:.2f}%"
+                    "<extra></extra>"
+                ),
+            ))
+
+    fig.update_layout(_base_layout(
+        title="Correlation Scalar (κ) Effect on Efficient Frontier",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="κ = 0: uncorrelated  |  κ = 1: full correlation  |  Stars = MVP per κ",
+    ))
+    return fig
+
+
+def chart_n_kappa_mvp_table(kappa_frontiers, mvp_points, current_kappa):
+    """
+    Plotly table: MVP statistics across κ values.
+
+    Returns
+    -------
+    go.Figure
+    """
+    rows = []
+    for k in sorted(kappa_frontiers.keys()):
+        mvp = mvp_points.get(k)
+        if mvp is None:
+            continue
+        rows.append({
+            "κ (Corr. Scalar)": f"{k:.2f}",
+            "MVP Std. Dev.":    f"{mvp['sd']:.2f}%",
+            "MVP Exp. Return":  f"{mvp['ret']:.2f}%",
+            "MVP Sharpe":       f"{mvp['sharpe']:.3f}",
+            "is_current":       abs(k - current_kappa) < 1e-9,
+        })
+
+    if not rows:
+        return go.Figure()
+
+    df   = pd.DataFrame(rows)
+    cols = [c for c in df.columns if c != "is_current"]
+    fill = ["#FFF3CD" if r else "#F8F9FA" for r in df["is_current"]]
+
+    fig = go.Figure(data=[go.Table(
+        columnwidth=[130, 130, 140, 110],
+        header=dict(
+            values=[f"<b>{c}</b>" for c in cols],
+            fill_color=COLORS["navy"],
+            font=dict(color="white", size=12),
+            align="center", height=36,
+        ),
+        cells=dict(
+            values=[df[c].tolist() for c in cols],
+            fill_color=[fill] * len(cols),
+            font=dict(color=COLORS["gray"], size=11),
+            align="center", height=30,
+        ),
+    )])
+    fig.update_layout(
+        title=dict(text="<b>MVP Comparison Across Correlation Scalars</b>",
+                   font=dict(size=13, color=COLORS["navy"]),
+                   x=0, xanchor="left"),
+        margin=dict(t=55, b=15, l=0, r=0),
+        paper_bgcolor=COLORS["white"],
+    )
+    return fig
+
+
+def chart_n_solver(frontier_df, result_row, mvp, asset_names):
+    """
+    N-asset solver result plotted on the efficient frontier.
+
+    Parameters
+    ----------
+    frontier_df : pd.DataFrame
+    result_row  : pd.Series or None
+    mvp         : pd.Series
+    asset_names : list of str
+
+    Returns
+    -------
+    go.Figure
+    """
+    fig    = go.Figure()
+    n      = len(asset_names)
+    w_cols = [f"w_{i+1}" for i in range(n)]
+    df_s   = frontier_df.sort_values("ret")
+
+    fig.add_trace(go.Scatter(
+        x=df_s["sd"], y=df_s["ret"],
+        mode="lines", name="Efficient Frontier",
+        line=dict(color=COLORS["efficient"], width=2),
+        hoverinfo="skip",
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=[mvp["sd"]], y=[mvp["ret"]],
+        mode="markers+text",
+        marker=dict(size=12, color=COLORS["green"], symbol="star",
+                    line=dict(width=1, color="white")),
+        text=["MVP"], textposition="top left",
+        textfont=dict(size=10, color=COLORS["green"]),
+        name="Min. Variance Portfolio",
+        hoverinfo="skip",
+    ))
+
+    if result_row is not None:
+        wstr = " | ".join(
+            f"{asset_names[i]}: {result_row[w_cols[i]] * 100:.1f}%"
+            for i in range(n)
+        )
+        fig.add_trace(go.Scatter(
+            x=[result_row["sd"]], y=[result_row["ret"]],
+            mode="markers+text",
+            marker=dict(size=18, color="#FF8C00", symbol="star",
+                        line=dict(width=2, color="white")),
+            text=["Result"], textposition="top right",
+            textfont=dict(size=11, color="#FF8C00"),
+            name="Solver Result",
+            customdata=[[wstr, result_row["sharpe"]]],
+            hovertemplate=(
+                "<b>Solver Result</b><br>"
+                "%{customdata[0]}<br>"
+                "Exp. Return: %{y:.2f}%<br>"
+                "Std. Dev.: %{x:.2f}%<br>"
+                "Sharpe: %{customdata[1]:.3f}"
+                "<extra></extra>"
+            ),
+        ))
+
+    fig.update_layout(_base_layout(
+        title="Portfolio Solver — Result on Efficient Frontier",
+        xaxis_title="Portfolio Std. Dev. (%)",
+        yaxis_title="Portfolio Exp. Return (%)",
+        subtitle="Gold star = solver result",
+    ))
+    return fig
+
+
+def chart_n_summary_table(frontier_df, asset_names, mvp, max_sr):
+    """
+    Plotly table with key N-asset portfolios: 100% each asset, MVP, Max Sharpe.
+
+    Returns
+    -------
+    go.Figure
+    """
+    n      = len(asset_names)
+    w_cols = [f"w_{i+1}" for i in range(n)]
+
+    def wstr(row):
+        return " / ".join(
+            f"{asset_names[i]}: {row[w_cols[i]] * 100:.1f}%"
+            for i in range(n)
+        )
+
+    rows = []
+    for i, name in enumerate(asset_names):
+        col   = w_cols[i]
+        ep_df = frontier_df[(frontier_df[col] > 0.97) &
+                            (frontier_df[col] < 1.03)]
+        if not ep_df.empty:
+            row = ep_df.iloc[(ep_df[col] - 1.0).abs().argsort().iloc[0]]
+            rows.append({
+                "Portfolio":    f"100% {name}",
+                "Weights":      wstr(row),
+                "Exp. Return":  f"{row['ret']:.2f}%",
+                "Std. Dev.":    f"{row['sd']:.2f}%",
+                "Sharpe Ratio": f"{row['sharpe']:.3f}",
+            })
+
+    rows.append({
+        "Portfolio":    "⭐ Min. Variance Portfolio (MVP)",
+        "Weights":      wstr(mvp),
+        "Exp. Return":  f"{mvp['ret']:.2f}%",
+        "Std. Dev.":    f"{mvp['sd']:.2f}%",
+        "Sharpe Ratio": f"{mvp['sharpe']:.3f}",
+    })
+    rows.append({
+        "Portfolio":    "⭐ Max. Sharpe Portfolio (MSP)",
+        "Weights":      wstr(max_sr),
+        "Exp. Return":  f"{max_sr['ret']:.2f}%",
+        "Std. Dev.":    f"{max_sr['sd']:.2f}%",
+        "Sharpe Ratio": f"{max_sr['sharpe']:.3f}",
+    })
+
+    df     = pd.DataFrame(rows)
+    n_cols = len(df.columns)
+    fill   = [
+        "#FFF3CD" if "⭐" in str(r.get("Portfolio", "")) else "#F8F9FA"
+        for _, r in df.iterrows()
+    ]
+
+    fig = go.Figure(data=[go.Table(
+        columnwidth=[200, 350, 110, 100, 110],
+        header=dict(
+            values=[f"<b>{c}</b>" for c in df.columns],
+            fill_color=COLORS["navy"],
+            font=dict(color="white", size=12),
+            align="center", height=36,
+        ),
+        cells=dict(
+            values=[df[c].tolist() for c in df.columns],
+            fill_color=[fill] * n_cols,
+            font=dict(color=COLORS["gray"], size=11),
+            align=["left", "left"] + ["center"] * (n_cols - 2),
+            height=32,
+        ),
+    )])
+    fig.update_layout(
+        title=dict(text="<b>Portfolio Summary — Key Allocation Points</b>",
+                   font=dict(size=14, color=COLORS["navy"]),
+                   x=0, xanchor="left"),
+        margin=dict(t=60, b=20, l=0, r=0),
+        paper_bgcolor=COLORS["white"],
+    )
+    return fig

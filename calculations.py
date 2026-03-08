@@ -723,3 +723,342 @@ def solve_portfolio(frontier_df, objective, goal, constraint, target=None,
         return None, False, f"Unknown goal: {goal}"
 
     return result_row, True, message
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 7. N-ASSET PORTFOLIO
+# ══════════════════════════════════════════════════════════════════════════════
+
+def n_portfolio_stats(w, mu, cov, rf):
+    """
+    Portfolio statistics for an N-asset portfolio.
+
+    Parameters
+    ----------
+    w   : array-like, shape (N,)   portfolio weights (sum = 1)
+    mu  : array-like, shape (N,)   expected returns (%)
+    cov : array-like, shape (N, N) covariance matrix (same % units)
+    rf  : float                    risk-free rate (%)
+
+    Returns
+    -------
+    (ret, sd, sharpe) : tuple of floats
+    """
+    w   = np.asarray(w,   dtype=float)
+    mu  = np.asarray(mu,  dtype=float)
+    cov = np.asarray(cov, dtype=float)
+    ret    = float(w @ mu)
+    var    = float(w @ cov @ w)
+    sd     = np.sqrt(max(var, 0.0))
+    sharpe = (ret - rf) / sd if sd > 1e-10 else 0.0
+    return ret, sd, sharpe
+
+
+def build_n_frontier(mu, cov, rf, allow_short=False, n_points=150):
+    """
+    Build the N-asset efficient frontier via SLSQP quadratic programming.
+
+    Sweeps target returns from MVP return to max feasible return,
+    minimising portfolio variance at each level.
+
+    Parameters
+    ----------
+    mu          : array-like, shape (N,)   expected returns (%)
+    cov         : array-like, shape (N, N) covariance matrix (same % units)
+    rf          : float                    risk-free rate (%)
+    allow_short : bool                     if True, weights in [−1, 2]
+    n_points    : int                      frontier resolution
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ret, sd, sharpe, w_1 … w_N, region ('efficient')
+        Returns empty DataFrame if optimisation fails entirely.
+    """
+    from scipy.optimize import minimize
+
+    mu  = np.asarray(mu,  dtype=float)
+    cov = np.asarray(cov, dtype=float)
+    n   = len(mu)
+
+    lb     = -1.0 if allow_short else 0.0
+    ub     =  2.0 if allow_short else 1.0
+    bounds = [(lb, ub)] * n
+
+    sum1 = {"type": "eq", "fun": lambda w: np.sum(w) - 1.0}
+
+    def var_fn(w):   return float(w @ cov @ w)
+    def var_grad(w): return 2.0 * (cov @ w)
+
+    w0 = np.ones(n) / n
+
+    # ── 1. Find MVP ────────────────────────────────────────────────────────
+    res_mvp = minimize(var_fn, w0, jac=var_grad, method="SLSQP",
+                       bounds=bounds, constraints=[sum1],
+                       options={"ftol": 1e-14, "maxiter": 2000})
+    w_mvp   = res_mvp.x if res_mvp.success else w0
+    mvp_ret = float(w_mvp @ mu)
+
+    # ── 2. Return range ────────────────────────────────────────────────────
+    if allow_short:
+        max_ret = float(mu.max()) * 1.5 + float(mu.min()) * (-0.5)
+        max_ret = min(max_ret, float(mu.max()) * 2.0)
+    else:
+        max_ret = float(mu.max())
+
+    target_rets = np.linspace(mvp_ret, max_ret, n_points)
+
+    # ── 3. Sweep efficient frontier ────────────────────────────────────────
+    rows   = []
+    w_prev = w_mvp.copy()
+
+    for target_ret in target_rets:
+        ret_con = {"type": "eq",
+                   "fun": lambda w, r=target_ret: float(w @ mu) - r}
+        res = minimize(var_fn, w_prev, jac=var_grad, method="SLSQP",
+                       bounds=bounds, constraints=[sum1, ret_con],
+                       options={"ftol": 1e-10, "maxiter": 500})
+        if not res.success:
+            res = minimize(var_fn, w0, jac=var_grad, method="SLSQP",
+                           bounds=bounds, constraints=[sum1, ret_con],
+                           options={"ftol": 1e-10, "maxiter": 500})
+        if res.success:
+            ws = res.x
+            ret_v, sd_v, sr_v = n_portfolio_stats(ws, mu, cov, rf)
+            row = {"ret": round(ret_v, 4), "sd": round(sd_v, 4),
+                   "sharpe": round(sr_v, 4)}
+            for i, wi in enumerate(ws):
+                row[f"w_{i+1}"] = round(float(wi), 4)
+            rows.append(row)
+            w_prev = res.x
+        else:
+            w_prev = w0
+
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+    df = df.drop_duplicates(subset=["ret", "sd"]).reset_index(drop=True)
+    df["region"] = "efficient"
+    return df
+
+
+def n_find_mvp(frontier_df):
+    """Find the Minimum Variance Portfolio row from an N-asset frontier DataFrame."""
+    return frontier_df.loc[frontier_df["sd"].idxmin()]
+
+
+def n_find_max_sharpe(frontier_df):
+    """Find the Max Sharpe Portfolio row from an N-asset frontier DataFrame."""
+    return frontier_df.loc[frontier_df["sharpe"].idxmax()]
+
+
+def build_n_kappa_frontiers(mu, sd_arr, corr_matrix, rf,
+                             kappa_list=None, allow_short=False, n_points=80):
+    """
+    Build N-asset frontiers for multiple correlation scalar values κ.
+
+    At κ=0 all assets are uncorrelated (diagonal covariance).
+    At κ=1 the full user-supplied correlation matrix is used.
+
+        cov_κ = diag(σ) @ [κ·(ρ − I) + I] @ diag(σ)
+
+    Parameters
+    ----------
+    mu          : array-like, shape (N,)
+    sd_arr      : array-like, shape (N,)
+    corr_matrix : array-like, shape (N, N)
+    rf          : float
+    kappa_list  : list of floats  (default: 0.0, 0.25, 0.5, 0.75, 1.0)
+    allow_short : bool
+    n_points    : int  (coarser than full frontier for speed)
+
+    Returns
+    -------
+    dict : { κ_value : pd.DataFrame }
+    """
+    if kappa_list is None:
+        kappa_list = [0.0, 0.25, 0.5, 0.75, 1.0]
+
+    mu   = np.asarray(mu,   dtype=float)
+    sd   = np.asarray(sd_arr, dtype=float)
+    corr = np.asarray(corr_matrix, dtype=float)
+    I    = np.eye(len(mu))
+    D    = np.diag(sd)
+
+    result = {}
+    for kappa in kappa_list:
+        corr_k = kappa * (corr - I) + I
+        cov_k  = D @ corr_k @ D
+        result[kappa] = build_n_frontier(mu, cov_k, rf,
+                                         allow_short=allow_short,
+                                         n_points=n_points)
+    return result
+
+
+def n_solve_portfolio(frontier_df, objective, goal, target=None,
+                      efficient_only=True):
+    """
+    Find the best N-asset portfolio from a pre-computed frontier DataFrame.
+
+    Parameters
+    ----------
+    frontier_df   : pd.DataFrame  output of build_n_frontier()
+    objective     : str  'ret' | 'sd' | 'sharpe'
+    goal          : str  'min' | 'max' | 'target'
+    target        : float or None  used when goal == 'target'
+    efficient_only: bool  if True, restrict to region == 'efficient'
+
+    Returns
+    -------
+    result_row : pd.Series or None
+    feasible   : bool
+    message    : str
+    """
+    df = frontier_df[frontier_df["region"] == "efficient"].copy() \
+         if efficient_only else frontier_df.copy()
+
+    if df.empty:
+        return None, False, "No portfolios available."
+
+    obj_labels = {"ret": "Exp. Return", "sd": "Std. Dev.", "sharpe": "Sharpe Ratio"}
+    label = obj_labels.get(objective, objective)
+
+    if goal == "min":
+        idx = df[objective].idxmin()
+        row = frontier_df.loc[idx]
+        msg = f"Minimum {label} = {row[objective]:.4f} on the efficient frontier."
+    elif goal == "max":
+        idx = df[objective].idxmax()
+        row = frontier_df.loc[idx]
+        msg = f"Maximum {label} = {row[objective]:.4f} on the efficient frontier."
+    elif goal == "target":
+        if target is None:
+            return None, False, "A target value is required."
+        diff  = (df[objective] - target).abs()
+        idx   = diff.idxmin()
+        row   = frontier_df.loc[idx]
+        delta = abs(row[objective] - target)
+        rng   = (df[objective].min(), df[objective].max())
+        if target < rng[0] or target > rng[1]:
+            msg = (f"Target {label} = {target:.4f} is outside the frontier range "
+                   f"[{rng[0]:.4f}, {rng[1]:.4f}]. "
+                   f"Nearest feasible: {row[objective]:.4f}  (Δ = {delta:.4f}).")
+        else:
+            msg = (f"Closest portfolio to {label} = {target:.4f}. "
+                   f"Actual: {row[objective]:.4f}  (Δ = {delta:.4f}).")
+    else:
+        return None, False, f"Unknown goal: {goal}"
+
+    return row, True, msg
+
+
+def validate_corr_matrix(corr_matrix):
+    """
+    Validate a correlation matrix.
+
+    Returns
+    -------
+    (is_valid : bool, errors : list of str)
+    """
+    corr   = np.asarray(corr_matrix, dtype=float)
+    errors = []
+
+    if not np.allclose(np.diag(corr), 1.0, atol=1e-6):
+        errors.append("Diagonal elements must equal 1.")
+    if not np.allclose(corr, corr.T, atol=1e-6):
+        errors.append("Matrix must be symmetric.")
+    if np.any(corr < -1.0 - 1e-6) or np.any(corr > 1.0 + 1e-6):
+        errors.append("All correlations must be in [−1, 1].")
+    eigvals = np.linalg.eigvalsh(corr)
+    if np.any(eigvals < -1e-6):
+        errors.append(
+            f"Matrix is not positive semi-definite "
+            f"(min eigenvalue = {eigvals.min():.4f})."
+        )
+    return len(errors) == 0, errors
+
+
+def nearest_psd_corr(corr_matrix):
+    """
+    Project a symmetric matrix onto the nearest positive semi-definite
+    correlation matrix by clipping negative eigenvalues and re-normalising.
+    """
+    corr = np.asarray(corr_matrix, dtype=float)
+    corr = (corr + corr.T) / 2.0
+    eigvals, eigvecs = np.linalg.eigh(corr)
+    eigvals = np.maximum(eigvals, 0.0)
+    corr_psd = eigvecs @ np.diag(eigvals) @ eigvecs.T
+    d = np.sqrt(np.diag(corr_psd))
+    d = np.where(d < 1e-12, 1.0, d)
+    corr_psd = corr_psd / np.outer(d, d)
+    np.fill_diagonal(corr_psd, 1.0)
+    return np.clip(corr_psd, -1.0, 1.0)
+
+
+def parse_n_csv(uploaded_df):
+    """
+    Parse an uploaded CSV DataFrame into N-asset parameters.
+
+    Expected format::
+
+        name,return_pct,sd_pct,corr_Asset A,corr_Asset B,...
+        Asset A,8.0,15.0,1.00,0.30,0.20
+        ...
+
+    Returns
+    -------
+    asset_names : list of str | None on error
+    mu          : np.ndarray shape (N,)
+    sd_arr      : np.ndarray shape (N,)
+    corr_matrix : np.ndarray shape (N, N)
+    errors      : list of str  (empty = OK)
+    """
+    required = ["name", "return_pct", "sd_pct"]
+    missing  = [c for c in required if c not in uploaded_df.columns]
+    if missing:
+        return None, None, None, None, [f"Missing required columns: {missing}"]
+
+    try:
+        asset_names = uploaded_df["name"].astype(str).tolist()
+        mu          = uploaded_df["return_pct"].astype(float).values
+        sd_arr      = uploaded_df["sd_pct"].astype(float).values
+    except Exception as exc:
+        return None, None, None, None, [f"Error parsing asset parameters: {exc}"]
+
+    n = len(asset_names)
+    if n < 2:
+        return None, None, None, None, ["CSV must contain at least 2 assets."]
+    if n > 20:
+        return None, None, None, None, ["CSV may not contain more than 20 assets."]
+
+    errors = []
+    corr_cols = [c for c in uploaded_df.columns if c.startswith("corr_")]
+    if len(corr_cols) == n:
+        try:
+            corr_matrix = uploaded_df[corr_cols].astype(float).values
+        except Exception as exc:
+            errors.append(f"Error parsing correlation columns: {exc}")
+            corr_matrix = np.full((n, n), 0.3)
+            np.fill_diagonal(corr_matrix, 1.0)
+    else:
+        corr_matrix = np.full((n, n), 0.3)
+        np.fill_diagonal(corr_matrix, 1.0)
+        if corr_cols:
+            errors.append(
+                f"Expected {n} corr_ columns, found {len(corr_cols)}. "
+                "Using default ρ = 0.3."
+            )
+
+    # Enforce symmetry, diagonal = 1, clip to [-1, 1]
+    corr_matrix = (corr_matrix + corr_matrix.T) / 2.0
+    np.fill_diagonal(corr_matrix, 1.0)
+    corr_matrix = np.clip(corr_matrix, -1.0, 1.0)
+
+    is_valid, corr_errors = validate_corr_matrix(corr_matrix)
+    if not is_valid:
+        errors.extend(corr_errors)
+        corr_matrix = nearest_psd_corr(corr_matrix)
+        errors.append("Correlation matrix adjusted to nearest valid PSD matrix.")
+
+    return asset_names, mu, sd_arr, corr_matrix, errors
