@@ -1225,7 +1225,11 @@ with tab4:
 
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-        _chart_rows = [(_rr, _rl) for _rr, _feas, _, _rl in _solver_results if _feas and _rr is not None]
+        _chart_rows = [
+            (_rr, f"{_goal_label} — {_rl}")
+            for _rr, _feas, _, _rl in _solver_results
+            if _feas and _rr is not None
+        ]
         st.markdown("#### Frontier Chart — Solver Result")
         st.plotly_chart(
             chart_frontier_with_solver(
