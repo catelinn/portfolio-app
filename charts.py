@@ -852,7 +852,12 @@ def chart_rho_effect(rho_frontiers, current_rho, r1, sd1, r2, sd2,
         title="Effect of Correlation on the Efficient Frontier",
         xaxis_title="Portfolio Std. Dev. (%)",
         yaxis_title="Portfolio Exp. Return (%)",
-        subtitle="Lower ρ → frontier bows further left → more diversification benefit",
+        subtitle=(
+            "Lower ρ → frontier bows further left → more diversification benefit (long-only region)  |  "
+            "Beyond 100% A2 (short A1): effect reverses — higher ρ reduces variance"
+            if allow_short
+            else "Lower ρ → frontier bows further left → more diversification benefit"
+        ),
     ))
     return fig
 
