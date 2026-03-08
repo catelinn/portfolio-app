@@ -680,9 +680,8 @@ with tab2:
         st.markdown(
             "<div class='warn-box'>"
             "⚠️ <b>Short-selling is enabled.</b> "
-            "Frontiers now extend to Asset 1 Weight: −100% → +200%, revealing the full diversification curve. "
-            "MVP weights are unconstrained — they may fall outside [0%, 100%], "
-            "producing lower minimum variance than the long-only case."
+            "Frontiers now extend to Asset 1 Weight: −100% → +200% | Asset 2 Weight: 200% → -100%, revealing the full diversification curve. "
+            "MVP weights are unconstrained — they may fall outside [0%, 100%]"
             "</div>",
             unsafe_allow_html=True,
         )
