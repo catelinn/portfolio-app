@@ -1313,7 +1313,7 @@ def chart_n_frontier(frontier_df, asset_names, mvp, max_sr, asset_mus=None, asse
     ))
 
     # Capital Allocation Line — from (0, rf) through tangency portfolio (MSP)
-    _cal_label = "Capital Allocation Line (Tangent to Risky Asset Efficient Frontier)"
+    _cal_label = "CAL (Tangent to Risky Asset Efficient Frontier)"
     if rf is not None and max_sr["sd"] > 0:
         slope   = max_sr["sharpe"]                       # = (ret_T - rf) / sd_T
         x_end   = eff_df["sd"].max() * 1.35
@@ -1350,7 +1350,7 @@ def chart_n_frontier(frontier_df, asset_names, mvp, max_sr, asset_mus=None, asse
 
     subtitle = "Green = Efficient Frontier  |  Stars = MVP & Max Sharpe Portfolio"
     if rf is not None:
-        subtitle += "  |  Orange = Capital Allocation Line"
+        subtitle += "  |  Orange = CAL (Tangent to Risky Asset Efficient Frontier)"
     fig.update_layout(_base_layout(
         title=f"N-Asset Efficient Frontier ({n} Assets)",
         xaxis_title="Portfolio Std. Dev. (%)",
