@@ -1918,6 +1918,18 @@ with tab_n:
                     delta_color="inverse",
                 )
 
+        # ── κ checkpoint interpretation table ────────────────────────────
+        st.markdown("#### κ Sensitivity Checkpoints")
+        st.markdown(
+            "| κ | Interpretation |\n"
+            "|---|---|\n"
+            "| **0.00** | Theoretical best case — zero correlation, maximum diversification |\n"
+            "| **0.25** | Mild correlation regime (e.g. low-volatility, crisis-free markets) |\n"
+            "| **0.50** | Moderate — halfway between uncorrelated ideal and full reality |\n"
+            "| **0.75** | Near-realistic — most correlations intact; useful stress-test level |\n"
+            "| **1.00** | Full reality — your actual input correlations applied |\n"
+        )
+
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
         # ── Overlaid frontiers chart ──────────────────────────────────────
@@ -1934,4 +1946,40 @@ with tab_n:
         st.plotly_chart(
             chart_n_kappa_mvp_table(_kappa_frs, _kappa_mvps, _kappa),
             use_container_width=True, key="n_kappa_mvp_table",
+        )
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # ── Concept & calculation explainer ───────────────────────────────
+        st.markdown("#### Correlation Scalar (κ) — Concept & Calculation")
+        st.markdown(
+            "**What is κ?**\n\n"
+            "κ (kappa) is a single number in the range [0, 1] that uniformly scales every "
+            "pairwise correlation in the matrix, while leaving each asset's own variance "
+            "completely unchanged.\n\n"
+            "**Formula**\n\n"
+            "The scaled covariance matrix is constructed as:\n\n"
+            "```\n"
+            "Cov(κ) = D · [ κ·C + (1 − κ)·I ] · D\n"
+            "```\n\n"
+            "| Symbol | Meaning |\n"
+            "|---|---|\n"
+            "| `D` | Diagonal matrix of asset standard deviations (σ₁, σ₂, …) |\n"
+            "| `C` | Original correlation matrix (your full input) |\n"
+            "| `I` | Identity matrix — represents zero off-diagonal correlation |\n"
+            "| `κ` | Scalar ∈ [0, 1] controlling how much of C is used |\n\n"
+            "**Effect on each element**\n\n"
+            "Every off-diagonal correlation becomes `κ · ρᵢⱼ`. "
+            "Diagonal entries (own-variance) are never touched by κ.\n\n"
+            "**Worked example** (using your current matrix):\n\n"
+            "| κ | ρ(A,B) used | ρ(A,C) used | ρ(B,C) used |\n"
+            "|---|---|---|---|\n"
+            "| 0.00 | 0.00 | 0.00 | 0.00 |\n"
+            "| 0.25 | 0.05 | 0.025 | 0.075 |\n"
+            "| 0.50 | 0.10 | 0.05 | 0.15 |\n"
+            "| 0.75 | 0.15 | 0.075 | 0.225 |\n"
+            "| 1.00 | 0.20 | 0.10 | 0.30 |\n\n"
+            "> **Note:** The worked example above assumes the default three-asset correlations "
+            "ρ(A,B) = 0.20, ρ(A,C) = 0.10, ρ(B,C) = 0.30. "
+            "If you change the correlation matrix, the scaled values will differ accordingly."
         )
