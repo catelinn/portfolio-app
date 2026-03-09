@@ -1208,7 +1208,7 @@ KAPPA_COLORS = {
 }
 
 
-def chart_n_frontier(frontier_df, asset_names, mvp, max_sr):
+def chart_n_frontier(frontier_df, asset_names, mvp, max_sr, asset_mus=None, asset_sds=None):
     """
     N-asset efficient frontier chart.
 
@@ -1258,26 +1258,21 @@ def chart_n_frontier(frontier_df, asset_names, mvp, max_sr):
             hovertemplate=hover_tpl,
         ))
 
-    # Asset endpoint markers
-    for i, name in enumerate(asset_names):
-        col   = w_cols[i]
-        ep_df = frontier_df[(frontier_df[col] > 0.97) &
-                            (frontier_df[col] < 1.03)]
-        if ep_df.empty:
-            continue
-        row   = ep_df.iloc[(ep_df[col] - 1.0).abs().argsort().iloc[0]]
-        color = N_ASSET_COLORS[i % len(N_ASSET_COLORS)]
-        fig.add_trace(go.Scatter(
-            x=[row["sd"]], y=[row["ret"]],
-            mode="markers+text",
-            marker=dict(size=10, color=color, symbol="circle",
-                        line=dict(width=1, color="white")),
-            text=[f"{name}"], textposition="top right",
-            textfont=dict(size=10, color=color),
-            name=f"{name}",
-            showlegend=True,
-            hoverinfo="skip",
-        ))
+    # Asset endpoint markers — always plot at each asset's own (σ, μ)
+    if asset_mus is not None and asset_sds is not None:
+        for i, name in enumerate(asset_names):
+            color = N_ASSET_COLORS[i % len(N_ASSET_COLORS)]
+            fig.add_trace(go.Scatter(
+                x=[asset_sds[i]], y=[asset_mus[i]],
+                mode="markers+text",
+                marker=dict(size=10, color=color, symbol="circle",
+                            line=dict(width=1, color="white")),
+                text=[name], textposition="top right",
+                textfont=dict(size=10, color=color),
+                name=name,
+                showlegend=True,
+                hoverinfo="skip",
+            ))
 
     # MVP
     fig.add_trace(go.Scatter(
