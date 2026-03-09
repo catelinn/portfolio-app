@@ -1697,17 +1697,6 @@ with tab_n:
             # ── Weight allocation bar chart ───────────────────────────────
             st.markdown("#### Weight Allocations — Key Portfolios")
             _port_list = [("MVP", _n_mvp), ("Max Sharpe", _n_max_sr)]
-            for _i, _nm in enumerate(_n_names):
-                _wcol = f"w_{_i+1}"
-                _ep   = _n_frontier_df[
-                    (_n_frontier_df[_wcol] > 0.97) &
-                    (_n_frontier_df[_wcol] < 1.03)
-                ]
-                if not _ep.empty:
-                    _port_list.append(
-                        (f"100% {_nm}",
-                         _ep.iloc[(_ep[_wcol] - 1.0).abs().argsort().iloc[0]])
-                    )
             st.plotly_chart(
                 chart_n_weights_bar(_port_list, _n_names),
                 use_container_width=True, key="n_weights_bar",

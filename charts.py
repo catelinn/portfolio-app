@@ -1226,7 +1226,7 @@ def chart_n_frontier(frontier_df, asset_names, mvp, max_sr, asset_mus=None, asse
     fig    = go.Figure()
     n      = len(asset_names)
     w_cols = [f"w_{i+1}" for i in range(n)]
-    eff_df = frontier_df.sort_values("ret")
+    eff_df = frontier_df[frontier_df["region"] == "efficient"].sort_values("ret") if "region" in frontier_df.columns else frontier_df.sort_values("ret")
 
     def _cd(df, label):
         out = []
@@ -1247,6 +1247,18 @@ def chart_n_frontier(frontier_df, asset_names, mvp, max_sr, asset_mus=None, asse
         "Sharpe Ratio: %{customdata[2]:.3f}"
         "<extra></extra>"
     )
+
+    dom_df = frontier_df[frontier_df["region"] == "dominated"].sort_values("ret") if "region" in frontier_df.columns else pd.DataFrame()
+    if not dom_df.empty:
+        fig.add_trace(go.Scatter(
+            x=dom_df["sd"], y=dom_df["ret"],
+            mode="lines",
+            name="Dominated Frontier",
+            line=dict(color=COLORS["efficient"], width=2, dash="dot"),
+            opacity=0.45,
+            customdata=_cd(dom_df, "Dominated Frontier"),
+            hovertemplate=hover_tpl,
+        ))
 
     if not eff_df.empty:
         fig.add_trace(go.Scatter(
@@ -1293,27 +1305,30 @@ def chart_n_frontier(frontier_df, asset_names, mvp, max_sr, asset_mus=None, asse
         mode="markers+text",
         marker=dict(size=14, color=COLORS["blue"], symbol="star-diamond",
                     line=dict(width=1, color="white")),
-        text=["MSP"], textposition="top right",
+        text=["MSP (Tangent Portfolio)"], textposition="top right",
         textfont=dict(size=10, color=COLORS["blue"]),
         name="Max Sharpe Portfolio",
         showlegend=True,
         hoverinfo="skip",
     ))
 
-    # Capital Market Line — from (0, rf) through tangency portfolio (MSP)
+    # Capital Allocation Line — from (0, rf) through tangency portfolio (MSP)
+    _cal_label = "Capital Allocation Line (Tangent to Risky Asset Efficient Frontier)"
     if rf is not None and max_sr["sd"] > 0:
         slope   = max_sr["sharpe"]                       # = (ret_T - rf) / sd_T
         x_end   = eff_df["sd"].max() * 1.35
-        y_start = rf
-        y_end   = rf + slope * x_end
+        # Interpolate ~80 points so hover works anywhere along the line
+        import numpy as _np
+        cal_x = _np.linspace(0, x_end, 80).tolist()
+        cal_y = [rf + slope * x for x in cal_x]
         fig.add_trace(go.Scatter(
-            x=[0, x_end],
-            y=[y_start, y_end],
+            x=cal_x,
+            y=cal_y,
             mode="lines",
-            name="Capital Market Line (CML)",
+            name=_cal_label,
             line=dict(color=COLORS.get("orange", "#E8883A"), width=1.8, dash="dot"),
             hovertemplate=(
-                "<b>Capital Market Line</b><br>"
+                f"<b>{_cal_label}</b><br>"
                 "σ = %{x:.2f}%<br>"
                 "E[R] = %{y:.2f}%<br>"
                 f"Slope (Sharpe) = {slope:.3f}"
@@ -1335,7 +1350,7 @@ def chart_n_frontier(frontier_df, asset_names, mvp, max_sr, asset_mus=None, asse
 
     subtitle = "Green = Efficient Frontier  |  Stars = MVP & Max Sharpe Portfolio"
     if rf is not None:
-        subtitle += "  |  Orange = Capital Market Line"
+        subtitle += "  |  Orange = Capital Allocation Line"
     fig.update_layout(_base_layout(
         title=f"N-Asset Efficient Frontier ({n} Assets)",
         xaxis_title="Portfolio Std. Dev. (%)",
