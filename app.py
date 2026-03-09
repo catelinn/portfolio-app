@@ -1393,6 +1393,10 @@ with tab_n:
             )
 
         else:
+            # Apply pending asset-count update BEFORE the slider renders
+            if "_n_n_assets_next" in st.session_state:
+                st.session_state["n_n_assets"] = st.session_state.pop("_n_n_assets_next")
+
             # Number of assets + RF rate
             _na_c1, _na_c2 = st.columns([3, 1])
             with _na_c1:
@@ -1484,7 +1488,7 @@ with tab_n:
                     st.session_state[f"n_sd_{_new}"]   = _vals["sd"]
                 for (_ni, _nj), _cv in _corr_snap.items():
                     st.session_state[f"n_corr_{_ni}_{_nj}"] = _cv
-                st.session_state["n_n_assets"] = len(_keep)
+                st.session_state["_n_n_assets_next"] = len(_keep)
                 st.rerun()
 
             # Correlation matrix editor
