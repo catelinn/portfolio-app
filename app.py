@@ -1635,7 +1635,7 @@ with tab_n:
             # ── Frontier chart ────────────────────────────────────────────
             st.markdown("#### Efficient Frontier")
             st.plotly_chart(
-                chart_n_frontier(_n_frontier_df, _n_names, _n_mvp, _n_max_sr, _n_mu, _n_sd),
+                chart_n_frontier(_n_frontier_df, _n_names, _n_mvp, _n_max_sr, _n_mu, _n_sd, rf=_n_rf),
                 use_container_width=True, key="n_frontier_chart",
             )
 
