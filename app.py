@@ -1422,6 +1422,11 @@ with tab_n:
             for _i in range(_n):
                 with _acols[_i % _CPR]:
                     _letter = chr(65 + _i)
+                    st.checkbox(
+                        f"Delete asset {_letter}",
+                        value=False,
+                        key=f"n_del_{_i}",
+                    )
                     st.text_input(
                         f"Name {_letter}",
                         value=st.session_state.get(f"n_name_{_i}", f"Asset {_letter}"),
@@ -1437,6 +1442,50 @@ with tab_n:
                         float(st.session_state.get(f"n_sd_{_i}", 20.0)),
                         1.0, key=f"n_sd_{_i}",
                     )
+
+            # --- Delete checked assets ---
+            _del_indices = [_i for _i in range(_n) if st.session_state.get(f"n_del_{_i}", False)]
+            _keep_count  = _n - len(_del_indices)
+            _del_disabled = _keep_count < 2
+            if st.button(
+                f"Remove {len(_del_indices)} checked asset(s)",
+                disabled=(_del_indices == [] or _del_disabled),
+                help="At least 2 assets must remain." if _del_disabled else None,
+            ):
+                _keep = [_i for _i in range(_n) if _i not in _del_indices]
+                # Snapshot values for kept assets before modifying session state
+                _snap = {
+                    _new: {
+                        "name": st.session_state.get(f"n_name_{_old}", f"Asset {chr(65+_old)}"),
+                        "ret":  float(st.session_state.get(f"n_ret_{_old}", 10.0)),
+                        "sd":   float(st.session_state.get(f"n_sd_{_old}", 20.0)),
+                    }
+                    for _new, _old in enumerate(_keep)
+                }
+                _corr_snap = {}
+                for _ni, _oi in enumerate(_keep):
+                    for _nj, _oj in enumerate(_keep):
+                        if _ni < _nj:
+                            _lo, _hi = min(_oi, _oj), max(_oi, _oj)
+                            _corr_snap[(_ni, _nj)] = float(
+                                st.session_state.get(f"n_corr_{_lo}_{_hi}", 0.3)
+                            )
+                # Clear ALL old asset keys up to _n
+                for _i in range(_n):
+                    for _k in (f"n_name_{_i}", f"n_ret_{_i}", f"n_sd_{_i}", f"n_del_{_i}"):
+                        st.session_state.pop(_k, None)
+                for _i in range(_n):
+                    for _j in range(_i + 1, _n):
+                        st.session_state.pop(f"n_corr_{_i}_{_j}", None)
+                # Write compacted values
+                for _new, _vals in _snap.items():
+                    st.session_state[f"n_name_{_new}"] = _vals["name"]
+                    st.session_state[f"n_ret_{_new}"]  = _vals["ret"]
+                    st.session_state[f"n_sd_{_new}"]   = _vals["sd"]
+                for (_ni, _nj), _cv in _corr_snap.items():
+                    st.session_state[f"n_corr_{_ni}_{_nj}"] = _cv
+                st.session_state["n_n_assets"] = len(_keep)
+                st.rerun()
 
             # Correlation matrix editor
             st.markdown("#### Correlation Matrix")
