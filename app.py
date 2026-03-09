@@ -1433,17 +1433,18 @@ with tab_n:
                     )
                     st.text_input(
                         f"Name {_letter}",
+                        value=st.session_state.get(f"n_name_{_i}", f"Asset {_letter}"),
                         key=f"n_name_{_i}",
                     )
                     st.number_input(
-                        f"Return (%) {_letter}",
-                        min_value=0.0, max_value=50.0, step=0.5,
-                        key=f"n_ret_{_i}",
+                        f"Return (%) {_letter}", 0.0, 50.0,
+                        float(st.session_state.get(f"n_ret_{_i}", 10.0)),
+                        0.5, key=f"n_ret_{_i}",
                     )
                     st.number_input(
-                        f"Std. Dev. (%) {_letter}",
-                        min_value=0.0, max_value=80.0, step=1.0,
-                        key=f"n_sd_{_i}",
+                        f"Std. Dev. (%) {_letter}", 0.0, 80.0,
+                        float(st.session_state.get(f"n_sd_{_i}", 20.0)),
+                        1.0, key=f"n_sd_{_i}",
                     )
 
             # --- Delete checked assets ---
@@ -1651,102 +1652,64 @@ with tab_n:
         _n_names, _n_mu, _n_sd, _n_corr, _n_cov, _n_rf = _n_get_params()
         _short = st.session_state.allow_short
 
-        # Param hash to detect staleness
+        # Cache keys (convert arrays to tuples for hashing)
         _mu_t  = tuple(_n_mu.tolist())
         _cov_t = tuple(map(tuple, _n_cov.tolist()))
-        _ef_cur_hash = (_mu_t, _cov_t, _n_rf, _short)
 
-        _ef_data  = st.session_state.get("n_ef_data")
-        _ef_stale = _ef_data is not None and _ef_data.get("params_hash") != _ef_cur_hash
+        _n_frontier_df, _n_mvp, _n_max_sr = _cached_n_frontier(
+            _mu_t, _cov_t, _n_rf, _short
+        )
 
-        # ── Generate button row ───────────────────────────────────────────
-        _ef_btn_col, _ef_msg_col = st.columns([1, 3])
-        with _ef_btn_col:
-            _ef_label = "Generate Frontier" if _ef_data is None else "Regenerate Frontier"
-            _ef_clicked = st.button(_ef_label, type="primary", key="n_ef_generate_btn")
-        if _ef_stale:
-            with _ef_msg_col:
-                st.warning("⚠️ Parameters have changed — click **Regenerate Frontier** to update.")
-
-        # ── Compute on button click ───────────────────────────────────────
-        if _ef_clicked:
-            _n_frontier_df, _n_mvp, _n_max_sr = _cached_n_frontier(
-                _mu_t, _cov_t, _n_rf, _short
+        if _n_frontier_df is None or _n_frontier_df.empty:
+            st.error(
+                "❌ Could not compute the efficient frontier for the current parameters. "
+                "Try adjusting asset parameters or the correlation matrix."
             )
-            st.session_state["n_ef_data"] = {
-                "frontier_df": _n_frontier_df,
-                "mvp":         _n_mvp,
-                "max_sr":      _n_max_sr,
-                "names":       _n_names,
-                "mu":          _n_mu,
-                "sd":          _n_sd,
-                "rf":          _n_rf,
-                "params_hash": _ef_cur_hash,
-            }
-            _ef_data = st.session_state["n_ef_data"]
-
-        # ── Display cached result ─────────────────────────────────────────
-        if _ef_data is None:
-            st.info("Set your asset parameters in the **Assets** tab, then click **Generate Frontier**.")
         else:
-            _n_frontier_df = _ef_data["frontier_df"]
-            _n_mvp         = _ef_data["mvp"]
-            _n_max_sr      = _ef_data["max_sr"]
-            _d_names       = _ef_data["names"]
-            _d_mu          = _ef_data["mu"]
-            _d_sd          = _ef_data["sd"]
-            _d_rf          = _ef_data["rf"]
+            # ── Metric cards ──────────────────────────────────────────────
+            st.markdown("#### Key Portfolio Statistics")
+            _mk_cols = st.columns(3)
+            with _mk_cols[0]:
+                st.metric("MVP — Std. Dev.", f"{_n_mvp['sd']:.2f}%")
+                st.metric("MVP — Exp. Return", f"{_n_mvp['ret']:.2f}%")
+                st.metric("MVP — Sharpe", f"{_n_mvp['sharpe']:.3f}")
+            with _mk_cols[1]:
+                st.metric("Max Sharpe — Std. Dev.", f"{_n_max_sr['sd']:.2f}%")
+                st.metric("Max Sharpe — Exp. Return", f"{_n_max_sr['ret']:.2f}%")
+                st.metric("Max Sharpe — Sharpe", f"{_n_max_sr['sharpe']:.3f}")
+            with _mk_cols[2]:
+                st.metric("Assets", str(len(_n_names)))
+                st.metric("Risk-Free Rate", f"{_n_rf:.1f}%")
+                st.metric("Short-Selling",
+                          "Enabled" if _short else "Disabled")
 
-            if _n_frontier_df is None or _n_frontier_df.empty:
-                st.error(
-                    "❌ Could not compute the efficient frontier for the current parameters. "
-                    "Try adjusting asset parameters or the correlation matrix."
-                )
-            else:
-                # ── Metric cards ──────────────────────────────────────────
-                st.markdown("#### Key Portfolio Statistics")
-                _mk_cols = st.columns(3)
-                with _mk_cols[0]:
-                    st.metric("MVP — Std. Dev.", f"{_n_mvp['sd']:.2f}%")
-                    st.metric("MVP — Exp. Return", f"{_n_mvp['ret']:.2f}%")
-                    st.metric("MVP — Sharpe", f"{_n_mvp['sharpe']:.3f}")
-                with _mk_cols[1]:
-                    st.metric("Max Sharpe — Std. Dev.", f"{_n_max_sr['sd']:.2f}%")
-                    st.metric("Max Sharpe — Exp. Return", f"{_n_max_sr['ret']:.2f}%")
-                    st.metric("Max Sharpe — Sharpe", f"{_n_max_sr['sharpe']:.3f}")
-                with _mk_cols[2]:
-                    st.metric("Assets", str(len(_d_names)))
-                    st.metric("Risk-Free Rate", f"{_d_rf:.1f}%")
-                    st.metric("Short-Selling",
-                              "Enabled" if _short else "Disabled")
+            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-                st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+            # ── Frontier chart ────────────────────────────────────────────
+            st.markdown("#### Efficient Frontier")
+            st.plotly_chart(
+                chart_n_frontier(_n_frontier_df, _n_names, _n_mvp, _n_max_sr, _n_mu, _n_sd, rf=_n_rf),
+                use_container_width=True, key="n_frontier_chart",
+            )
 
-                # ── Frontier chart ────────────────────────────────────────
-                st.markdown("#### Efficient Frontier")
-                st.plotly_chart(
-                    chart_n_frontier(_n_frontier_df, _d_names, _n_mvp, _n_max_sr, _d_mu, _d_sd, rf=_d_rf),
-                    use_container_width=True, key="n_frontier_chart",
-                )
+            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-                st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+            # ── Weight allocation bar chart ───────────────────────────────
+            st.markdown("#### Weight Allocations — Key Portfolios")
+            _port_list = [("MVP", _n_mvp), ("Max Sharpe", _n_max_sr)]
+            st.plotly_chart(
+                chart_n_weights_bar(_port_list, _n_names),
+                use_container_width=True, key="n_weights_bar",
+            )
 
-                # ── Weight allocation bar chart ───────────────────────────
-                st.markdown("#### Weight Allocations — Key Portfolios")
-                _port_list = [("MVP", _n_mvp), ("Max Sharpe", _n_max_sr)]
-                st.plotly_chart(
-                    chart_n_weights_bar(_port_list, _d_names),
-                    use_container_width=True, key="n_weights_bar",
-                )
+            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-                st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-                # ── Summary table ─────────────────────────────────────────
-                st.markdown("#### Summary Table")
-                st.plotly_chart(
-                    chart_n_summary_table(_n_frontier_df, _d_names, _n_mvp, _n_max_sr),
-                    use_container_width=True, key="n_summary_table",
-                )
+            # ── Summary table ─────────────────────────────────────────────
+            st.markdown("#### Summary Table")
+            st.plotly_chart(
+                chart_n_summary_table(_n_frontier_df, _n_names, _n_mvp, _n_max_sr),
+                use_container_width=True, key="n_summary_table",
+            )
 
     # ════════════════════════════════════════════════════════════════════════
     # SUB-TAB 3 — SOLVER
@@ -1757,143 +1720,108 @@ with tab_n:
         _short = st.session_state.allow_short
         _mu_t  = tuple(_n_mu.tolist())
         _cov_t = tuple(map(tuple, _n_cov.tolist()))
-        _sol_cur_hash = (_mu_t, _cov_t, _n_rf, _short)
 
-        # Reuse the shared frontier cache from sub-tab 2 (n_ef_data)
-        _ef_data      = st.session_state.get("n_ef_data")
-        _sol_has_frt  = _ef_data is not None and _ef_data.get("params_hash") == _sol_cur_hash
-        _sol_stale    = _ef_data is not None and not _sol_has_frt
+        _n_frontier_df, _n_mvp, _n_max_sr = _cached_n_frontier(
+            _mu_t, _cov_t, _n_rf, _short
+        )
 
-        # ── Generate button row ───────────────────────────────────────────
-        _sol_btn_col, _sol_msg_col = st.columns([1, 3])
-        with _sol_btn_col:
-            _sol_btn_label = "Generate Frontier" if not _sol_has_frt else "Regenerate Frontier"
-            _sol_clicked = st.button(_sol_btn_label, type="primary", key="n_sol_generate_btn")
-        if _sol_stale:
-            with _sol_msg_col:
-                st.warning("⚠️ Parameters have changed — click **Regenerate Frontier** to update.")
-
-        if _sol_clicked:
-            _n_frontier_df, _n_mvp, _n_max_sr = _cached_n_frontier(
-                _mu_t, _cov_t, _n_rf, _short
-            )
-            st.session_state["n_ef_data"] = {
-                "frontier_df": _n_frontier_df,
-                "mvp":         _n_mvp,
-                "max_sr":      _n_max_sr,
-                "names":       _n_names,
-                "mu":          _n_mu,
-                "sd":          _n_sd,
-                "rf":          _n_rf,
-                "params_hash": _sol_cur_hash,
-            }
-            _ef_data     = st.session_state["n_ef_data"]
-            _sol_has_frt = True
-
-        if not _sol_has_frt:
-            st.info("Set your asset parameters in the **Assets** tab, then click **Generate Frontier**.")
+        if _n_frontier_df is None or _n_frontier_df.empty:
+            st.error("❌ No frontier available. Check the Assets tab.")
         else:
-            _n_frontier_df = _ef_data["frontier_df"]
-            _n_mvp         = _ef_data["mvp"]
-            _d_names       = _ef_data["names"]
-
-            if _n_frontier_df is None or _n_frontier_df.empty:
-                st.error("❌ No frontier available. Check the Assets tab.")
-            else:
-                # ── Solver controls (auto-apply, no heavy compute) ────────
-                st.markdown("<div class='param-banner'>🎯 Solver Settings</div>",
-                            unsafe_allow_html=True)
-                with st.expander("🎯 Solver Settings", expanded=True):
-                    _sc1, _sc2, _sc3 = st.columns(3)
-                    with _sc1:
-                        _sol_obj = st.selectbox(
-                            "Objective",
-                            ["Expected Return", "Std. Dev.", "Sharpe Ratio"],
-                            index=["Expected Return", "Std. Dev.", "Sharpe Ratio"].index(
-                                st.session_state.n_sol_objective
-                            ),
-                            key="n_sol_objective",
-                        )
-                    with _sc2:
-                        _sol_goal = st.selectbox(
-                            "Goal",
-                            ["Maximize", "Minimize", "Target"],
-                            index=["Maximize", "Minimize", "Target"].index(
-                                st.session_state.n_sol_goal
-                            ),
-                            key="n_sol_goal",
-                        )
-                    with _sc3:
-                        _sol_target = st.number_input(
-                            "Target Value",
-                            value=float(st.session_state.n_sol_target),
-                            step=0.5,
-                            key="n_sol_target",
-                            disabled=(st.session_state.n_sol_goal != "Target"),
-                        )
-
-                    _sol_eff_only = st.checkbox(
-                        "Restrict search to efficient portfolios only",
-                        value=bool(st.session_state.n_sol_efficient_only),
-                        key="n_sol_efficient_only",
+            # ── Solver controls ───────────────────────────────────────────
+            st.markdown("<div class='param-banner'>🎯 Solver Settings</div>",
+                        unsafe_allow_html=True)
+            with st.expander("🎯 Solver Settings", expanded=True):
+                _sc1, _sc2, _sc3 = st.columns(3)
+                with _sc1:
+                    _sol_obj = st.selectbox(
+                        "Objective",
+                        ["Expected Return", "Std. Dev.", "Sharpe Ratio"],
+                        index=["Expected Return", "Std. Dev.", "Sharpe Ratio"].index(
+                            st.session_state.n_sol_objective
+                        ),
+                        key="n_sol_objective",
+                    )
+                with _sc2:
+                    _sol_goal = st.selectbox(
+                        "Goal",
+                        ["Maximize", "Minimize", "Target"],
+                        index=["Maximize", "Minimize", "Target"].index(
+                            st.session_state.n_sol_goal
+                        ),
+                        key="n_sol_goal",
+                    )
+                with _sc3:
+                    _sol_target = st.number_input(
+                        "Target Value",
+                        value=float(st.session_state.n_sol_target),
+                        step=0.5,
+                        key="n_sol_target",
+                        disabled=(st.session_state.n_sol_goal != "Target"),
                     )
 
-                # Map UI labels to internal keys
-                _obj_map  = {
-                    "Expected Return": "ret",
-                    "Std. Dev.":       "sd",
-                    "Sharpe Ratio":    "sharpe",
-                }
-                _goal_map = {"Maximize": "max", "Minimize": "min", "Target": "target"}
-                _obj_key  = _obj_map[st.session_state.n_sol_objective]
-                _goal_key = _goal_map[st.session_state.n_sol_goal]
-                _target   = (float(st.session_state.n_sol_target)
-                             if _goal_key == "target" else None)
-
-                _sol_row, _feasible, _sol_msg = n_solve_portfolio(
-                    _n_frontier_df,
-                    objective=_obj_key,
-                    goal=_goal_key,
-                    target=_target,
-                    efficient_only=bool(st.session_state.n_sol_efficient_only),
+                _sol_eff_only = st.checkbox(
+                    "Restrict search to efficient portfolios only",
+                    value=bool(st.session_state.n_sol_efficient_only),
+                    key="n_sol_efficient_only",
                 )
 
-                # ── Result ────────────────────────────────────────────────
-                if _feasible and _sol_row is not None:
-                    st.success(_sol_msg)
-                    _r_cols = st.columns(3)
-                    with _r_cols[0]:
-                        st.metric("Exp. Return", f"{_sol_row['ret']:.2f}%")
-                    with _r_cols[1]:
-                        st.metric("Std. Dev.", f"{_sol_row['sd']:.2f}%")
-                    with _r_cols[2]:
-                        st.metric("Sharpe Ratio", f"{_sol_row['sharpe']:.3f}")
+            # Map UI labels to internal keys
+            _obj_map  = {
+                "Expected Return": "ret",
+                "Std. Dev.":       "sd",
+                "Sharpe Ratio":    "sharpe",
+            }
+            _goal_map = {"Maximize": "max", "Minimize": "min", "Target": "target"}
+            _obj_key  = _obj_map[st.session_state.n_sol_objective]
+            _goal_key = _goal_map[st.session_state.n_sol_goal]
+            _target   = (float(st.session_state.n_sol_target)
+                         if _goal_key == "target" else None)
 
-                    # Weight cards
-                    st.markdown("**Optimal Weights**")
-                    _wc = st.columns(len(_d_names))
-                    for _i, _nm in enumerate(_d_names):
-                        with _wc[_i]:
-                            _wval = _sol_row[f"w_{_i+1}"] * 100
-                            st.metric(_nm, f"{_wval:.1f}%")
+            _sol_row, _feasible, _sol_msg = n_solve_portfolio(
+                _n_frontier_df,
+                objective=_obj_key,
+                goal=_goal_key,
+                target=_target,
+                efficient_only=bool(st.session_state.n_sol_efficient_only),
+            )
 
-                    # Weight bar chart
-                    st.plotly_chart(
-                        chart_n_weights_bar([("Optimal", _sol_row)], _d_names),
-                        use_container_width=True, key="n_solver_weights",
-                    )
-                else:
-                    st.warning(_sol_msg)
-                    _sol_row = None
+            # ── Result ────────────────────────────────────────────────────
+            if _feasible and _sol_row is not None:
+                st.success(_sol_msg)
+                _r_cols = st.columns(3)
+                with _r_cols[0]:
+                    st.metric("Exp. Return", f"{_sol_row['ret']:.2f}%")
+                with _r_cols[1]:
+                    st.metric("Std. Dev.", f"{_sol_row['sd']:.2f}%")
+                with _r_cols[2]:
+                    st.metric("Sharpe Ratio", f"{_sol_row['sharpe']:.3f}")
 
-                st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+                # Weight cards
+                st.markdown("**Optimal Weights**")
+                _wc = st.columns(len(_n_names))
+                for _i, _nm in enumerate(_n_names):
+                    with _wc[_i]:
+                        _wval = _sol_row[f"w_{_i+1}"] * 100
+                        st.metric(_nm, f"{_wval:.1f}%")
 
-                # ── Frontier chart with result ─────────────────────────────
-                st.markdown("#### Frontier Chart — Solver Result")
+                # Weight bar chart
                 st.plotly_chart(
-                    chart_n_solver(_n_frontier_df, _sol_row, _n_mvp, _d_names),
-                    use_container_width=True, key="n_solver_chart",
+                    chart_n_weights_bar([("Optimal", _sol_row)], _n_names),
+                    use_container_width=True, key="n_solver_weights",
                 )
+            else:
+                st.warning(_sol_msg)
+                _sol_row = None
+
+            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+            # ── Frontier chart with result ─────────────────────────────────
+            st.markdown("#### Frontier Chart — Solver Result")
+            st.plotly_chart(
+                chart_n_solver(_n_frontier_df, _sol_row, _n_mvp, _n_names),
+                use_container_width=True, key="n_solver_chart",
+            )
 
     # ════════════════════════════════════════════════════════════════════════
     # SUB-TAB 4 — CORRELATION EFFECT
@@ -1903,16 +1831,7 @@ with tab_n:
         _n_names, _n_mu, _n_sd, _n_corr, _n_cov, _n_rf = _n_get_params()
         _short = st.session_state.allow_short
 
-        # Param hash to detect staleness
-        _mu_t   = tuple(_n_mu.tolist())
-        _sd_t   = tuple(_n_sd.tolist())
-        _corr_t = tuple(map(tuple, _n_corr.tolist()))
-        _kap_cur_hash = (_mu_t, _sd_t, _corr_t, _n_rf, _short)
-
-        _kap_data  = st.session_state.get("n_kappa_data")
-        _kap_stale = _kap_data is not None and _kap_data.get("params_hash") != _kap_cur_hash
-
-        # ── Correlation heatmap (always shown — fast, no heavy compute) ───
+        # ── Correlation heatmap ───────────────────────────────────────────
         st.markdown("#### Current Correlation Matrix")
         st.plotly_chart(
             chart_n_heatmap(_n_corr, _n_names),
@@ -1921,7 +1840,7 @@ with tab_n:
 
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-        # ── Kappa slider + generate button ────────────────────────────────
+        # ── Kappa slider ──────────────────────────────────────────────────
         st.markdown("#### Correlation Scalar (κ) Effect")
         st.markdown(
             "<div class='info-box'>"
@@ -1941,72 +1860,53 @@ with tab_n:
             help="κ = 0 → uncorrelated  |  κ = 1 → full correlation",
         )
 
-        # ── Generate button row ───────────────────────────────────────────
-        _kap_btn_col, _kap_msg_col = st.columns([1, 3])
-        with _kap_btn_col:
-            _kap_label   = "Generate Analysis" if _kap_data is None else "Regenerate Analysis"
-            _kap_clicked = st.button(_kap_label, type="primary", key="n_kap_generate_btn")
-        if _kap_stale:
-            with _kap_msg_col:
-                st.warning("⚠️ Parameters have changed — click **Regenerate Analysis** to update.")
+        # Cache keys
+        _mu_t   = tuple(_n_mu.tolist())
+        _sd_t   = tuple(_n_sd.tolist())
+        _corr_t = tuple(map(tuple, _n_corr.tolist()))
 
-        # ── Compute on button click ───────────────────────────────────────
-        if _kap_clicked:
-            _kappa_frs, _kappa_mvps = _cached_n_kappa(
-                _mu_t, _sd_t, _corr_t, _n_rf, _short
+        _kappa_frs, _kappa_mvps = _cached_n_kappa(
+            _mu_t, _sd_t, _corr_t, _n_rf, _short
+        )
+
+        # Diversification benefit metrics
+        _mvp_full = _kappa_mvps.get(1.0)
+        _mvp_zero = _kappa_mvps.get(0.0)
+        if _mvp_full is not None and _mvp_zero is not None:
+            _div_benefit = _mvp_zero["sd"] - _mvp_full["sd"]
+            _div_pct     = (
+                (_mvp_zero["sd"] - _mvp_full["sd"]) / _mvp_zero["sd"] * 100
+                if _mvp_zero["sd"] > 0 else 0
             )
-            st.session_state["n_kappa_data"] = {
-                "kappa_frs":   _kappa_frs,
-                "kappa_mvps":  _kappa_mvps,
-                "params_hash": _kap_cur_hash,
-            }
-            _kap_data = st.session_state["n_kappa_data"]
-
-        # ── Display cached result ─────────────────────────────────────────
-        if _kap_data is None:
-            st.info("Set your asset parameters in the **Assets** tab, then click **Generate Analysis**.")
-        else:
-            _kappa_frs  = _kap_data["kappa_frs"]
-            _kappa_mvps = _kap_data["kappa_mvps"]
-
-            # Diversification benefit metrics
-            _mvp_full = _kappa_mvps.get(1.0)
-            _mvp_zero = _kappa_mvps.get(0.0)
-            if _mvp_full is not None and _mvp_zero is not None:
-                _div_benefit = _mvp_zero["sd"] - _mvp_full["sd"]
-                _div_pct     = (
-                    (_mvp_zero["sd"] - _mvp_full["sd"]) / _mvp_zero["sd"] * 100
-                    if _mvp_zero["sd"] > 0 else 0
+            _mb_cols = st.columns(3)
+            with _mb_cols[0]:
+                st.metric("MVP Std. Dev. (κ=0, uncorrelated)",
+                          f"{_mvp_zero['sd']:.2f}%")
+            with _mb_cols[1]:
+                st.metric("MVP Std. Dev. (κ=1, full correlation)",
+                          f"{_mvp_full['sd']:.2f}%")
+            with _mb_cols[2]:
+                st.metric(
+                    "Diversification Benefit",
+                    f"{_div_benefit:.2f}%",
+                    delta=f"{_div_pct:.1f}% reduction",
+                    delta_color="inverse",
                 )
-                _mb_cols = st.columns(3)
-                with _mb_cols[0]:
-                    st.metric("MVP Std. Dev. (κ=0, uncorrelated)",
-                              f"{_mvp_zero['sd']:.2f}%")
-                with _mb_cols[1]:
-                    st.metric("MVP Std. Dev. (κ=1, full correlation)",
-                              f"{_mvp_full['sd']:.2f}%")
-                with _mb_cols[2]:
-                    st.metric(
-                        "Diversification Benefit",
-                        f"{_div_benefit:.2f}%",
-                        delta=f"{_div_pct:.1f}% reduction",
-                        delta_color="inverse",
-                    )
 
-            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-            # ── Overlaid frontiers chart ──────────────────────────────────
-            st.markdown("#### Efficient Frontiers Across κ Values")
-            st.plotly_chart(
-                chart_n_kappa_effect(_kappa_frs, _kappa, _kappa_mvps),
-                use_container_width=True, key="n_kappa_chart",
-            )
+        # ── Overlaid frontiers chart ──────────────────────────────────────
+        st.markdown("#### Efficient Frontiers Across κ Values")
+        st.plotly_chart(
+            chart_n_kappa_effect(_kappa_frs, _kappa, _kappa_mvps),
+            use_container_width=True, key="n_kappa_chart",
+        )
 
-            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-            # ── MVP comparison table ──────────────────────────────────────
-            st.markdown("#### MVP Comparison Across κ Values")
-            st.plotly_chart(
-                chart_n_kappa_mvp_table(_kappa_frs, _kappa_mvps, _kappa),
-                use_container_width=True, key="n_kappa_mvp_table",
-            )
+        # ── MVP comparison table ──────────────────────────────────────────
+        st.markdown("#### MVP Comparison Across κ Values")
+        st.plotly_chart(
+            chart_n_kappa_mvp_table(_kappa_frs, _kappa_mvps, _kappa),
+            use_container_width=True, key="n_kappa_mvp_table",
+        )
