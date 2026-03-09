@@ -1270,11 +1270,11 @@ def chart_n_frontier(frontier_df, asset_names, mvp, max_sr):
         fig.add_trace(go.Scatter(
             x=[row["sd"]], y=[row["ret"]],
             mode="markers+text",
-            marker=dict(size=10, color=color, symbol="diamond",
+            marker=dict(size=10, color=color, symbol="circle",
                         line=dict(width=1, color="white")),
-            text=[f"100% {name}"], textposition="top right",
+            text=[f"{name}"], textposition="top right",
             textfont=dict(size=10, color=color),
-            name=f"100% {name}",
+            name=f"{name}",
             showlegend=True,
             hoverinfo="skip",
         ))
