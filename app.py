@@ -1457,8 +1457,11 @@ with tab_n:
                 " ", editable=False, pinned="left", width=110,
                 cellStyle={"backgroundColor": "#EEEEEE", "fontWeight": "bold"},
             )
+            # JS array of asset names used across multiple JsCode snippets
+            _col_names_js = "[" + ", ".join(f'"{n}"' for n in _cur_names) + "]"
+
             for _j, _col in enumerate(_cur_names):
-                # Only cells strictly above the diagonal (rowIndex < col index) are editable
+                # Only cells strictly above the diagonal are editable
                 _edit_js = JsCode(
                     f"function(p) {{ return p.node.rowIndex < {_j}; }}"
                 )
@@ -1480,26 +1483,49 @@ with tab_n:
                 _fmt_js = JsCode(
                     "function(p) { return (p.value != null) ? p.value.toFixed(2) : ''; }"
                 )
+                # valueGetter: diagonal → 1.0; lower triangle → live mirror of
+                # the corresponding upper-triangle cell; upper triangle → stored value.
+                _getter_js = JsCode(
+                    f"function(p) {{"
+                    f"  var r = p.node.rowIndex;"
+                    f"  var cols = {_col_names_js};"
+                    f"  if (r === {_j}) return 1.0;"
+                    f"  if (r < {_j}) return p.data[cols[{_j}]];"
+                    f"  var mirror = p.api.getDisplayedRowAtIndex({_j});"
+                    f"  return mirror ? mirror.data[cols[r]] : p.data[cols[{_j}]];"
+                    f"}}"
+                )
                 _gb.configure_column(
                     _col,
                     editable=_edit_js,
                     cellStyle=_style_js,
+                    valueGetter=_getter_js,
                     valueParser=_parser_js,
                     valueFormatter=_fmt_js,
                     type=["numericColumn"],
                     width=80,
                 )
+
+            # After editing an upper-triangle cell, force-refresh the mirror
+            # lower-triangle cell so its valueGetter re-evaluates immediately.
+            _on_change_js = JsCode(
+                f"function(params) {{"
+                f"  var cols = {_col_names_js};"
+                f"  var j = cols.indexOf(params.column.getColDef().field);"
+                f"  var r = params.node.rowIndex;"
+                f"  if (j < 0 || r >= j) return;"
+                f"  var mirrorNode = params.api.getDisplayedRowAtIndex(j);"
+                f"  if (mirrorNode) {{"
+                f"    params.api.refreshCells({{ rowNodes: [mirrorNode], columns: [cols[r]], force: true }});"
+                f"  }}"
+                f"}}"
+            )
             _gb.configure_grid_options(
                 stopEditingWhenCellsLoseFocus=True,
                 singleClickEdit=True,
+                onCellValueChanged=_on_change_js,
             )
 
-            # Key includes a data signature so AgGrid re-initialises whenever
-            # any correlation value changes, keeping lower triangle in sync.
-            _ag_sig = "_".join(
-                f"{_si}{_sj}{st.session_state.get(f'n_corr_{_si}_{_sj}', 0.3):.3f}"
-                for _si in range(_n) for _sj in range(_si + 1, _n)
-            )
             _ag_resp = AgGrid(
                 _ag_df,
                 gridOptions=_gb.build(),
@@ -1507,7 +1533,7 @@ with tab_n:
                 fit_columns_on_grid_load=True,
                 allow_unsafe_jscode=True,
                 height=max(200, (_n + 2) * 42),
-                key=f"n_corr_aggrid_{_n}_{_ag_sig}",
+                key=f"n_corr_aggrid_{_n}",
             )
 
             # Read upper triangle only; build symmetric matrix
