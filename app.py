@@ -1732,7 +1732,7 @@ with tab_n:
             # ── Summary table ─────────────────────────────────────────────
             st.markdown("#### Summary Table")
             st.plotly_chart(
-                chart_n_summary_table(_n_frontier_df, _n_names, _n_mvp, _n_max_sr),
+                chart_n_summary_table(_n_frontier_df, _n_names, _n_mvp, _n_max_sr, _n_mu, _n_sd, _n_rf),
                 use_container_width=True, key="n_summary_table",
             )
 

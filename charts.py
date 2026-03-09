@@ -1660,7 +1660,7 @@ def chart_n_solver(frontier_df, result_row, mvp, asset_names):
     return fig
 
 
-def chart_n_summary_table(frontier_df, asset_names, mvp, max_sr):
+def chart_n_summary_table(frontier_df, asset_names, mvp, max_sr, mu, sd, rf):
     """
     Plotly table with key N-asset portfolios: 100% each asset, MVP, Max Sharpe.
 
@@ -1679,18 +1679,18 @@ def chart_n_summary_table(frontier_df, asset_names, mvp, max_sr):
 
     rows = []
     for i, name in enumerate(asset_names):
-        col   = w_cols[i]
-        ep_df = frontier_df[(frontier_df[col] > 0.97) &
-                            (frontier_df[col] < 1.03)]
-        if not ep_df.empty:
-            row = ep_df.iloc[(ep_df[col] - 1.0).abs().argsort().iloc[0]]
-            rows.append({
-                "Portfolio":    f"100% {name}",
-                "Weights":      wstr(row),
-                "Exp. Return":  f"{row['ret']:.2f}%",
-                "Std. Dev.":    f"{row['sd']:.2f}%",
-                "Sharpe Ratio": f"{row['sharpe']:.3f}",
-            })
+        weights_str = " / ".join(
+            f"{asset_names[j]}: {'100.0' if j == i else '0.0'}%"
+            for j in range(n)
+        )
+        sharpe = (mu[i] - rf) / sd[i] if sd[i] > 0 else 0.0
+        rows.append({
+            "Portfolio":    f"100% {name}",
+            "Weights":      weights_str,
+            "Exp. Return":  f"{mu[i]:.2f}%",
+            "Std. Dev.":    f"{sd[i]:.2f}%",
+            "Sharpe Ratio": f"{sharpe:.3f}",
+        })
 
     rows.append({
         "Portfolio":    "⭐ Min. Variance Portfolio (MVP)",
