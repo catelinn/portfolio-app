@@ -10,6 +10,8 @@ Run with: streamlit run app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from st_aggrid.shared import JsCode
 
 from calculations import (
     build_frontier, build_cal, build_rho_frontiers,
@@ -1417,10 +1419,10 @@ with tab_n:
             # Correlation matrix editor
             st.markdown("#### Correlation Matrix")
             st.caption(
-                "Edit pairwise correlations in the table below — editing either "
-                "cell of a pair (e.g. A/B or B/A) updates both automatically. "
-                "Diagonal cells are fixed at 1.0; entering any other value "
-                "triggers an error and is auto-corrected."
+                "Edit upper-triangle correlations (above the diagonal) — "
+                "the lower triangle mirrors each value automatically on commit. "
+                "Diagonal cells are locked at 1.0 (an asset is always perfectly "
+                "correlated with itself)."
             )
 
             _cur_names = [
@@ -1428,7 +1430,7 @@ with tab_n:
                 for i in range(_n)
             ]
 
-            # Build initial matrix DataFrame from session state
+            # Build matrix DataFrame from session state
             _corr_init = {}
             for _j in range(_n):
                 _col_data = []
@@ -1447,44 +1449,69 @@ with tab_n:
 
             _corr_df_in = pd.DataFrame(_corr_init, index=_cur_names)
 
-            _col_cfg = {
-                col: st.column_config.NumberColumn(
-                    col, min_value=-1.0, max_value=1.0, format="%.2f"
+            # AgGrid: row-label column + correlation columns
+            _ag_df = _corr_df_in.reset_index().rename(columns={"index": " "})
+
+            _gb = GridOptionsBuilder.from_dataframe(_ag_df)
+            _gb.configure_column(
+                " ", editable=False, pinned="left", width=110,
+                cellStyle={"backgroundColor": "#EEEEEE", "fontWeight": "bold"},
+            )
+            for _j, _col in enumerate(_cur_names):
+                # Only cells strictly above the diagonal (rowIndex < col index) are editable
+                _edit_js = JsCode(
+                    f"function(p) {{ return p.node.rowIndex < {_j}; }}"
                 )
-                for col in _cur_names
-            }
-            _edited = st.data_editor(
-                _corr_df_in,
-                use_container_width=True,
-                key=f"n_corr_editor_{_n}",
-                column_config=_col_cfg,
+                _style_js = JsCode(
+                    f"function(p) {{"
+                    f"  var r = p.node.rowIndex;"
+                    f"  if (r === {_j}) return {{'backgroundColor':'#DEDEDE','color':'#444444','fontWeight':'bold'}};"
+                    f"  if (r  >  {_j}) return {{'backgroundColor':'#F4F4F4','color':'#888888'}};"
+                    f"  return {{'cursor':'pointer'}};"
+                    f"}}"
+                )
+                _parser_js = JsCode(
+                    "function(p) {"
+                    " var v = parseFloat(p.newValue);"
+                    " if (isNaN(v)) return p.oldValue;"
+                    " return Math.max(-1, Math.min(1, Math.round(v * 1000) / 1000));"
+                    "}"
+                )
+                _fmt_js = JsCode(
+                    "function(p) { return (p.value != null) ? p.value.toFixed(2) : ''; }"
+                )
+                _gb.configure_column(
+                    _col,
+                    editable=_edit_js,
+                    cellStyle=_style_js,
+                    valueParser=_parser_js,
+                    valueFormatter=_fmt_js,
+                    type=["numericColumn"],
+                    width=80,
+                )
+            _gb.configure_grid_options(
+                stopEditingWhenCellsLoseFocus=True,
+                singleClickEdit=True,
             )
 
-            # Post-process: symmetrise by propagating whichever cell changed,
-            # clamp, then check diagonal
-            _arr = _edited.values.astype(float)
-            _init_arr = _corr_df_in.values.astype(float)
-            _out = _arr.copy()
-            for _si in range(_n):
-                for _sj in range(_si + 1, _n):
-                    _upper_changed = abs(_arr[_si, _sj] - _init_arr[_si, _sj]) > 1e-9
-                    _lower_changed = abs(_arr[_sj, _si] - _init_arr[_sj, _si]) > 1e-9
-                    _val = _arr[_sj, _si] if (_lower_changed and not _upper_changed) else _arr[_si, _sj]
-                    _out[_si, _sj] = _val
-                    _out[_sj, _si] = _val
-            _arr = np.clip(_out, -1.0, 1.0)
+            _ag_resp = AgGrid(
+                _ag_df,
+                gridOptions=_gb.build(),
+                update_mode=GridUpdateMode.VALUE_CHANGED,
+                fit_columns_on_grid_load=True,
+                allow_unsafe_jscode=True,
+                height=max(200, (_n + 2) * 42),
+                key=f"n_corr_aggrid_{_n}",
+            )
 
-            _diag_changed = [
-                _cur_names[_di] for _di in range(_n)
-                if abs(_arr[_di, _di] - 1.0) > 1e-9
-            ]
-            if _diag_changed:
-                st.error(
-                    "⛔ Diagonal entries must equal 1.0 — an asset is always "
-                    "perfectly correlated with itself. "
-                    f"Auto-correcting: {', '.join(_diag_changed)}."
-                )
-
+            # Read upper triangle only; build symmetric matrix
+            _ret = _ag_resp["data"][_cur_names].values.astype(float)
+            _arr = np.zeros((_n, _n))
+            for _i in range(_n):
+                for _j in range(_i + 1, _n):
+                    _v = float(np.clip(_ret[_i, _j], -1.0, 1.0))
+                    _arr[_i, _j] = _v
+                    _arr[_j, _i] = _v
             np.fill_diagonal(_arr, 1.0)
 
             # Persist off-diagonal back to session state
