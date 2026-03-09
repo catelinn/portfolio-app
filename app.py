@@ -1428,71 +1428,28 @@ with tab_n:
                 for i in range(_n)
             ]
 
-            # Build initial matrix DataFrame from session state
-            _corr_init = {}
-            for _j in range(_n):
-                _col_data = []
-                for _i in range(_n):
-                    if _i == _j:
-                        _col_data.append(1.0)
-                    elif _i < _j:
-                        _col_data.append(
-                            float(st.session_state.get(f"n_corr_{_i}_{_j}", 0.3))
-                        )
-                    else:
-                        _col_data.append(
-                            float(st.session_state.get(f"n_corr_{_j}_{_i}", 0.3))
-                        )
-                _corr_init[_cur_names[_j]] = _col_data
-
-            _corr_df_in = pd.DataFrame(_corr_init, index=_cur_names)
-
-            _col_cfg = {
-                col: st.column_config.NumberColumn(
-                    col, min_value=-1.0, max_value=1.0, format="%.2f"
-                )
-                for col in _cur_names
-            }
-            _edited = st.data_editor(
-                _corr_df_in,
-                use_container_width=True,
-                key=f"n_corr_editor_{_n}",
-                column_config=_col_cfg,
-            )
-
-            # Post-process: symmetrise by propagating whichever cell changed,
-            # clamp, then check diagonal
-            _arr = _edited.values.astype(float)
-            _init_arr = _corr_df_in.values.astype(float)
-            _out = _arr.copy()
-            for _si in range(_n):
-                for _sj in range(_si + 1, _n):
-                    _upper_changed = abs(_arr[_si, _sj] - _init_arr[_si, _sj]) > 1e-9
-                    _lower_changed = abs(_arr[_sj, _si] - _init_arr[_sj, _si]) > 1e-9
-                    _val = _arr[_sj, _si] if (_lower_changed and not _upper_changed) else _arr[_si, _sj]
-                    _out[_si, _sj] = _val
-                    _out[_sj, _si] = _val
-            _arr = np.clip(_out, -1.0, 1.0)
-
-            _diag_changed = [
-                _cur_names[_di] for _di in range(_n)
-                if abs(_arr[_di, _di] - 1.0) > 1e-9
-            ]
-            if _diag_changed:
-                st.error(
-                    "⛔ Diagonal entries must equal 1.0 — an asset is always "
-                    "perfectly correlated with itself. "
-                    f"Auto-correcting: {', '.join(_diag_changed)}."
-                )
-
-            np.fill_diagonal(_arr, 1.0)
-
-            # Persist off-diagonal back to session state
-            for _i in range(_n):
-                for _j in range(_i + 1, _n):
-                    st.session_state[f"n_corr_{_i}_{_j}"] = round(
-                        float(_arr[_i, _j]), 3
+            # One number_input per unique pair — avoids data_editor symmetry lag
+            _pairs = [(i, j) for i in range(_n) for j in range(i + 1, _n)]
+            _cols_per_row = 3
+            for _row_start in range(0, len(_pairs), _cols_per_row):
+                _row_pairs = _pairs[_row_start : _row_start + _cols_per_row]
+                _row_cols = st.columns(len(_row_pairs))
+                for _rc, (_pi, _pj) in zip(_row_cols, _row_pairs):
+                    _rc.number_input(
+                        f"ρ({_cur_names[_pi]}, {_cur_names[_pj]})",
+                        min_value=-1.0,
+                        max_value=1.0,
+                        step=0.05,
+                        format="%.2f",
+                        key=f"n_corr_{_pi}_{_pj}",
                     )
+
+            # Build symmetric matrix from session state
+            _arr = np.eye(_n)
+            for _i, _j in _pairs:
+                _v = float(st.session_state.get(f"n_corr_{_i}_{_j}", 0.3))
+                _arr[_i, _j] = _v
+                _arr[_j, _i] = _v
 
             _is_valid, _corr_errs = validate_corr_matrix(_arr)
             if not _is_valid:
