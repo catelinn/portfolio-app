@@ -1417,9 +1417,9 @@ with tab_n:
             # Correlation matrix editor
             st.markdown("#### Correlation Matrix")
             st.caption(
-                "Edit pairwise correlations in the table below — the matrix is "
-                "automatically symmetrised. Diagonal cells (asset with itself) are "
-                "fixed at 1.0 and highlighted in blue; entering any other value "
+                "Edit pairwise correlations in the table below — editing either "
+                "cell of a pair (e.g. A/B or B/A) updates both automatically. "
+                "Diagonal cells are fixed at 1.0; entering any other value "
                 "triggers an error and is auto-corrected."
             )
 
@@ -1447,21 +1447,6 @@ with tab_n:
 
             _corr_df_in = pd.DataFrame(_corr_init, index=_cur_names)
 
-            # Styled read-only view — dark blue diagonal
-            def _style_corr_diag(df):
-                styles = pd.DataFrame("", index=df.index, columns=df.columns)
-                for _di in range(len(df)):
-                    styles.iloc[_di, _di] = (
-                        "background-color: #1a3a6b; color: white; font-weight: bold;"
-                    )
-                return styles
-
-            st.dataframe(
-                _corr_df_in.style.apply(_style_corr_diag, axis=None).format("{:.2f}"),
-                use_container_width=True,
-            )
-            st.caption("Current matrix — diagonal fixed at 1.0 (blue). Edit values below:")
-
             _col_cfg = {
                 col: st.column_config.NumberColumn(
                     col, min_value=-1.0, max_value=1.0, format="%.2f"
@@ -1475,10 +1460,19 @@ with tab_n:
                 column_config=_col_cfg,
             )
 
-            # Post-process: symmetrise, clamp, check diagonal
+            # Post-process: symmetrise by propagating whichever cell changed,
+            # clamp, then check diagonal
             _arr = _edited.values.astype(float)
-            _arr = (_arr + _arr.T) / 2.0
-            _arr = np.clip(_arr, -1.0, 1.0)
+            _init_arr = _corr_df_in.values.astype(float)
+            _out = _arr.copy()
+            for _si in range(_n):
+                for _sj in range(_si + 1, _n):
+                    _upper_changed = abs(_arr[_si, _sj] - _init_arr[_si, _sj]) > 1e-9
+                    _lower_changed = abs(_arr[_sj, _si] - _init_arr[_sj, _si]) > 1e-9
+                    _val = _arr[_sj, _si] if (_lower_changed and not _upper_changed) else _arr[_si, _sj]
+                    _out[_si, _sj] = _val
+                    _out[_sj, _si] = _val
+            _arr = np.clip(_out, -1.0, 1.0)
 
             _diag_changed = [
                 _cur_names[_di] for _di in range(_n)
