@@ -1494,6 +1494,12 @@ with tab_n:
                 singleClickEdit=True,
             )
 
+            # Key includes a data signature so AgGrid re-initialises whenever
+            # any correlation value changes, keeping lower triangle in sync.
+            _ag_sig = "_".join(
+                f"{_si}{_sj}{st.session_state.get(f'n_corr_{_si}_{_sj}', 0.3):.3f}"
+                for _si in range(_n) for _sj in range(_si + 1, _n)
+            )
             _ag_resp = AgGrid(
                 _ag_df,
                 gridOptions=_gb.build(),
@@ -1501,7 +1507,7 @@ with tab_n:
                 fit_columns_on_grid_load=True,
                 allow_unsafe_jscode=True,
                 height=max(200, (_n + 2) * 42),
-                key=f"n_corr_aggrid_{_n}",
+                key=f"n_corr_aggrid_{_n}_{_ag_sig}",
             )
 
             # Read upper triangle only; build symmetric matrix
