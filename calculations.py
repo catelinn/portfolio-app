@@ -808,38 +808,52 @@ def build_n_frontier(mu, cov, rf, allow_short=False, n_points=150):
 
     target_rets = np.linspace(mvp_ret, max_ret, n_points)
 
-    # ── 3. Sweep efficient frontier ────────────────────────────────────────
-    rows   = []
-    w_prev = w_mvp.copy()
-
-    for target_ret in target_rets:
-        ret_con = {"type": "eq",
-                   "fun": lambda w, r=target_ret: float(w @ mu) - r}
-        res = minimize(var_fn, w_prev, jac=var_grad, method="SLSQP",
-                       bounds=bounds, constraints=[sum1, ret_con],
-                       options={"ftol": 1e-10, "maxiter": 500})
-        if not res.success:
-            res = minimize(var_fn, w0, jac=var_grad, method="SLSQP",
+    # ── 3. Sweep helper ────────────────────────────────────────────────────
+    def _sweep(targets, region):
+        rows   = []
+        w_prev = w_mvp.copy()
+        for target_ret in targets:
+            ret_con = {"type": "eq",
+                       "fun": lambda w, r=target_ret: float(w @ mu) - r}
+            res = minimize(var_fn, w_prev, jac=var_grad, method="SLSQP",
                            bounds=bounds, constraints=[sum1, ret_con],
                            options={"ftol": 1e-10, "maxiter": 500})
-        if res.success:
-            ws = res.x
-            ret_v, sd_v, sr_v = n_portfolio_stats(ws, mu, cov, rf)
-            row = {"ret": round(ret_v, 4), "sd": round(sd_v, 4),
-                   "sharpe": round(sr_v, 4)}
-            for i, wi in enumerate(ws):
-                row[f"w_{i+1}"] = round(float(wi), 4)
-            rows.append(row)
-            w_prev = res.x
-        else:
-            w_prev = w0
+            if not res.success:
+                res = minimize(var_fn, w0, jac=var_grad, method="SLSQP",
+                               bounds=bounds, constraints=[sum1, ret_con],
+                               options={"ftol": 1e-10, "maxiter": 500})
+            if res.success:
+                ws = res.x
+                ret_v, sd_v, sr_v = n_portfolio_stats(ws, mu, cov, rf)
+                row = {"ret": round(ret_v, 4), "sd": round(sd_v, 4),
+                       "sharpe": round(sr_v, 4), "region": region}
+                for i, wi in enumerate(ws):
+                    row[f"w_{i+1}"] = round(float(wi), 4)
+                rows.append(row)
+                w_prev = res.x
+            else:
+                w_prev = w0
+        return rows
 
+    rows_eff = _sweep(target_rets, "efficient")
+
+    # ── 4. Sweep dominated frontier (min return → MVP) ─────────────────────
+    if allow_short:
+        min_ret = mvp_ret - (max_ret - mvp_ret)
+    else:
+        min_ret = float(mu.min())
+
+    rows_dom = []
+    if min_ret < mvp_ret - 1e-6:
+        dom_targets = np.linspace(min_ret, mvp_ret, n_points)
+        rows_dom = _sweep(dom_targets, "dominated")
+
+    rows = rows_eff + rows_dom
     if not rows:
         return pd.DataFrame()
 
     df = pd.DataFrame(rows)
     df = df.drop_duplicates(subset=["ret", "sd"]).reset_index(drop=True)
-    df["region"] = "efficient"
     return df
 
 
