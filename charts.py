@@ -1208,7 +1208,7 @@ KAPPA_COLORS = {
 }
 
 
-def chart_n_frontier(frontier_df, asset_names, mvp, max_sr, asset_mus=None, asset_sds=None):
+def chart_n_frontier(frontier_df, asset_names, mvp, max_sr, asset_mus=None, asset_sds=None, rf=None):
     """
     N-asset efficient frontier chart.
 
@@ -1300,11 +1300,47 @@ def chart_n_frontier(frontier_df, asset_names, mvp, max_sr, asset_mus=None, asse
         hoverinfo="skip",
     ))
 
+    # Capital Market Line — from (0, rf) through tangency portfolio (MSP)
+    if rf is not None and max_sr["sd"] > 0:
+        slope   = max_sr["sharpe"]                       # = (ret_T - rf) / sd_T
+        x_end   = eff_df["sd"].max() * 1.35
+        y_start = rf
+        y_end   = rf + slope * x_end
+        fig.add_trace(go.Scatter(
+            x=[0, x_end],
+            y=[y_start, y_end],
+            mode="lines",
+            name="Capital Market Line (CML)",
+            line=dict(color=COLORS.get("orange", "#E8883A"), width=1.8, dash="dot"),
+            hovertemplate=(
+                "<b>Capital Market Line</b><br>"
+                "σ = %{x:.2f}%<br>"
+                "E[R] = %{y:.2f}%<br>"
+                f"Slope (Sharpe) = {slope:.3f}"
+                "<extra></extra>"
+            ),
+        ))
+        # Mark the risk-free rate intercept
+        fig.add_trace(go.Scatter(
+            x=[0], y=[rf],
+            mode="markers+text",
+            marker=dict(size=9, color=COLORS.get("orange", "#E8883A"), symbol="circle",
+                        line=dict(width=1, color="white")),
+            text=[f"rf={rf:.1f}%"], textposition="middle right",
+            textfont=dict(size=9, color=COLORS.get("orange", "#E8883A")),
+            name="Risk-Free Rate",
+            showlegend=True,
+            hoverinfo="skip",
+        ))
+
+    subtitle = "Green = Efficient Frontier  |  Stars = MVP & Max Sharpe Portfolio"
+    if rf is not None:
+        subtitle += "  |  Orange = Capital Market Line"
     fig.update_layout(_base_layout(
         title=f"N-Asset Efficient Frontier ({n} Assets)",
         xaxis_title="Portfolio Std. Dev. (%)",
         yaxis_title="Portfolio Exp. Return (%)",
-        subtitle="Green = Efficient Frontier  |  Stars = MVP & Max Sharpe Portfolio",
+        subtitle=subtitle,
     ))
     return fig
 
