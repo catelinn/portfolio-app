@@ -236,7 +236,14 @@ for _i in range(8):
     for _j in range(_i + 1, 8):
         N_DEFAULTS[f"n_corr_{_i}_{_j}"] = 0.3
 
-for key, val in N_DEFAULTS.items():
+# Persistent shadow keys (_p_) — never tied to a widget, so Streamlit's
+# orphan-state cleanup never erases them when the Assets sub-tab is hidden.
+# _n_get_params() reads from these; widget on_change callbacks keep them in sync.
+_P_DEFAULTS: dict = {f"_p_{k}": v for k, v in N_DEFAULTS.items()
+                     if k.startswith(("n_n_assets", "n_name_", "n_ret_",
+                                      "n_sd_", "n_corr_"))}
+
+for key, val in {**N_DEFAULTS, **_P_DEFAULTS}.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
@@ -384,17 +391,17 @@ def _n_get_params():
         sd    = np.array(st.session_state.n_csv_sd,   dtype=float)
         corr  = np.array(st.session_state.n_csv_corr, dtype=float)
     else:
-        n     = int(st.session_state.n_n_assets)
-        names = [st.session_state.get(f"n_name_{i}", f"Asset {chr(65+i)}")
+        n     = int(st.session_state.get("_p_n_n_assets", 3))
+        names = [st.session_state.get(f"_p_n_name_{i}", f"Asset {chr(65+i)}")
                  for i in range(n)]
-        mu    = np.array([st.session_state.get(f"n_ret_{i}", 10.0)
+        mu    = np.array([st.session_state.get(f"_p_n_ret_{i}", 10.0)
                           for i in range(n)], dtype=float)
-        sd    = np.array([st.session_state.get(f"n_sd_{i}",  20.0)
+        sd    = np.array([st.session_state.get(f"_p_n_sd_{i}",  20.0)
                           for i in range(n)], dtype=float)
         corr  = np.eye(n)
         for i in range(n):
             for j in range(i + 1, n):
-                v = float(st.session_state.get(f"n_corr_{i}_{j}", 0.3))
+                v = float(st.session_state.get(f"_p_n_corr_{i}_{j}", 0.3))
                 corr[i, j] = v
                 corr[j, i] = v
     cov = np.diag(sd) @ corr @ np.diag(sd)
@@ -1325,7 +1332,7 @@ with tab_n:
                 )
             with _csv_c2:
                 st.markdown("**Template**")
-                _n_cur = int(st.session_state.n_n_assets)
+                _n_cur = int(st.session_state.get("_p_n_n_assets", st.session_state.get("n_n_assets", 3)))
                 _tpl   = _n_template_csv(_n_cur)
                 st.download_button(
                     "⬇ Download Template",
@@ -1402,8 +1409,11 @@ with tab_n:
             with _na_c1:
                 _n_assets = st.slider(
                     "Number of Assets", 2, 8,
-                    int(st.session_state.n_n_assets), 1,
+                    int(st.session_state.get("_p_n_n_assets", 3)), 1,
                     key="n_n_assets",
+                    on_change=lambda: st.session_state.update(
+                        {"_p_n_n_assets": st.session_state["n_n_assets"]}
+                    ),
                 )
             with _na_c2:
                 st.number_input(
@@ -1417,7 +1427,7 @@ with tab_n:
                     help="Adds the risk-free asset (return = RF rate, std. dev. = 0%, zero correlation with all risky assets) to the portfolio optimization.",
                 )
 
-            _n = int(st.session_state.n_n_assets)
+            _n = int(st.session_state.get("_p_n_n_assets", 3))
 
             # Asset parameter inputs (up to 4 columns per row)
             st.markdown("#### Asset Parameters")
@@ -1433,18 +1443,27 @@ with tab_n:
                     )
                     st.text_input(
                         f"Name {_letter}",
-                        value=st.session_state.get(f"n_name_{_i}", f"Asset {_letter}"),
+                        value=st.session_state.get(f"_p_n_name_{_i}", f"Asset {_letter}"),
                         key=f"n_name_{_i}",
+                        on_change=lambda i=_i: st.session_state.update(
+                            {f"_p_n_name_{i}": st.session_state[f"n_name_{i}"]}
+                        ),
                     )
                     st.number_input(
                         f"Return (%) {_letter}", 0.0, 50.0,
-                        float(st.session_state.get(f"n_ret_{_i}", 10.0)),
+                        float(st.session_state.get(f"_p_n_ret_{_i}", 10.0)),
                         0.5, key=f"n_ret_{_i}",
+                        on_change=lambda i=_i: st.session_state.update(
+                            {f"_p_n_ret_{i}": st.session_state[f"n_ret_{i}"]}
+                        ),
                     )
                     st.number_input(
                         f"Std. Dev. (%) {_letter}", 0.0, 80.0,
-                        float(st.session_state.get(f"n_sd_{_i}", 20.0)),
+                        float(st.session_state.get(f"_p_n_sd_{_i}", 20.0)),
                         1.0, key=f"n_sd_{_i}",
+                        on_change=lambda i=_i: st.session_state.update(
+                            {f"_p_n_sd_{i}": st.session_state[f"n_sd_{i}"]}
+                        ),
                     )
 
             # --- Delete checked assets ---
@@ -1481,14 +1500,20 @@ with tab_n:
                 for _i in range(_n):
                     for _j in range(_i + 1, _n):
                         st.session_state.pop(f"n_corr_{_i}_{_j}", None)
-                # Write compacted values
+                # Write compacted values (both widget keys and persistent shadow keys)
                 for _new, _vals in _snap.items():
-                    st.session_state[f"n_name_{_new}"] = _vals["name"]
-                    st.session_state[f"n_ret_{_new}"]  = _vals["ret"]
-                    st.session_state[f"n_sd_{_new}"]   = _vals["sd"]
+                    st.session_state[f"n_name_{_new}"]   = _vals["name"]
+                    st.session_state[f"n_ret_{_new}"]    = _vals["ret"]
+                    st.session_state[f"n_sd_{_new}"]     = _vals["sd"]
+                    st.session_state[f"_p_n_name_{_new}"] = _vals["name"]
+                    st.session_state[f"_p_n_ret_{_new}"]  = _vals["ret"]
+                    st.session_state[f"_p_n_sd_{_new}"]   = _vals["sd"]
                 for (_ni, _nj), _cv in _corr_snap.items():
-                    st.session_state[f"n_corr_{_ni}_{_nj}"] = _cv
-                st.session_state["_n_n_assets_next"] = len(_keep)
+                    st.session_state[f"n_corr_{_ni}_{_nj}"]   = _cv
+                    st.session_state[f"_p_n_corr_{_ni}_{_nj}"] = _cv
+                _new_count = len(_keep)
+                st.session_state["_n_n_assets_next"]  = _new_count
+                st.session_state["_p_n_n_assets"]     = _new_count
                 st.rerun()
 
             # Correlation matrix editor
@@ -1505,7 +1530,7 @@ with tab_n:
                 for i in range(_n)
             ]
 
-            # Build matrix DataFrame from session state
+            # Build matrix DataFrame from session state (read from shadow keys)
             _corr_init = {}
             for _j in range(_n):
                 _col_data = []
@@ -1514,11 +1539,11 @@ with tab_n:
                         _col_data.append(1.0)
                     elif _i < _j:
                         _col_data.append(
-                            float(st.session_state.get(f"n_corr_{_i}_{_j}", 0.3))
+                            float(st.session_state.get(f"_p_n_corr_{_i}_{_j}", 0.3))
                         )
                     else:
                         _col_data.append(
-                            float(st.session_state.get(f"n_corr_{_j}_{_i}", 0.3))
+                            float(st.session_state.get(f"_p_n_corr_{_j}_{_i}", 0.3))
                         )
                 _corr_init[_cur_names[_j]] = _col_data
 
@@ -1621,12 +1646,12 @@ with tab_n:
                     _arr[_j, _i] = _v
             np.fill_diagonal(_arr, 1.0)
 
-            # Persist off-diagonal back to session state
+            # Persist off-diagonal back to session state (widget key + shadow key)
             for _i in range(_n):
                 for _j in range(_i + 1, _n):
-                    st.session_state[f"n_corr_{_i}_{_j}"] = round(
-                        float(_arr[_i, _j]), 3
-                    )
+                    _cv = round(float(_arr[_i, _j]), 3)
+                    st.session_state[f"n_corr_{_i}_{_j}"]   = _cv
+                    st.session_state[f"_p_n_corr_{_i}_{_j}"] = _cv
 
             _is_valid, _corr_errs = validate_corr_matrix(_arr)
             if not _is_valid:
