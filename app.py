@@ -222,6 +222,7 @@ N_DEFAULTS: dict = {
     "n_rf":                3.0,
     "n_kappa":             1.0,
     "n_csv_active":        False,
+    "n_include_rf":        False,
     "n_sol_objective":     "Expected Return",
     "n_sol_goal":          "Maximize",
     "n_sol_target":        10.0,
@@ -398,6 +399,15 @@ def _n_get_params():
                 corr[j, i] = v
     cov = np.diag(sd) @ corr @ np.diag(sd)
     rf  = float(st.session_state.get("n_rf", 3.0))
+    if st.session_state.get("n_include_rf", False):
+        n_orig = len(names)
+        new_corr = np.eye(n_orig + 1)
+        new_corr[:n_orig, :n_orig] = corr
+        names = names + ["Risk-Free"]
+        mu   = np.append(mu, rf)
+        sd   = np.append(sd, 0.0)
+        corr = new_corr
+        cov  = np.diag(sd) @ corr @ np.diag(sd)
     return names, mu, sd, corr, cov, rf
 
 
@@ -1364,6 +1374,12 @@ with tab_n:
             with _rf_col:
                 st.number_input("Risk-Free Rate (%)", 0.0, 15.0,
                                 float(st.session_state.n_rf), 0.5, key="n_rf")
+                st.checkbox(
+                    "Risk Free in Portfolio?",
+                    value=st.session_state.get("n_include_rf", False),
+                    key="n_include_rf",
+                    help="Adds the risk-free asset (return = RF rate, std. dev. = 0%, zero correlation with all risky assets) to the portfolio optimization.",
+                )
             # Preview
             _prev_df = pd.DataFrame({
                 "Asset":          _csv_names_disp,
@@ -1390,6 +1406,12 @@ with tab_n:
                     "Risk-Free Rate (%)", 0.0, 15.0,
                     float(st.session_state.n_rf), 0.5, key="n_rf",
                 )
+                st.checkbox(
+                    "Risk Free in Portfolio?",
+                    value=st.session_state.get("n_include_rf", False),
+                    key="n_include_rf",
+                    help="Adds the risk-free asset (return = RF rate, std. dev. = 0%, zero correlation with all risky assets) to the portfolio optimization.",
+                )
 
             _n = int(st.session_state.n_n_assets)
 
@@ -1411,7 +1433,7 @@ with tab_n:
                         0.5, key=f"n_ret_{_i}",
                     )
                     st.number_input(
-                        f"Std. Dev. (%) {_letter}", 1.0, 80.0,
+                        f"Std. Dev. (%) {_letter}", 0.0, 80.0,
                         float(st.session_state.get(f"n_sd_{_i}", 20.0)),
                         1.0, key=f"n_sd_{_i}",
                     )
