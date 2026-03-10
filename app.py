@@ -7,11 +7,15 @@ FIN 511 - Investments I: Module 1, Lesson 1-5
 Run with: streamlit run app.py
 """
 
+import importlib
 import streamlit as st
 import pandas as pd
 import numpy as np
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 from st_aggrid.shared import JsCode
+
+import charts as _charts_mod
+importlib.reload(_charts_mod)
 
 from calculations import (
     build_frontier, build_cal, build_rho_frontiers,
