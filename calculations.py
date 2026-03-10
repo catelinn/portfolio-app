@@ -415,11 +415,11 @@ def frontier_summary_table(frontier_df, r1, sd1, r2, sd2, rho, rf,
     def make_row(label, w_a1, ret, sd, sharpe):
         return {
             "Portfolio":      label,
-            "Asset 1 Weight": f"{w_a1 * 100:.1f}%",
-            "Asset 2 Weight": f"{(1 - w_a1) * 100:.1f}%",
-            "Exp. Return":    f"{ret:.2f}%",
-            "Std. Dev.":      f"{sd:.2f}%",
-            "Sharpe Ratio":   f"{sharpe:.3f}",
+            "Asset 1 Weight": round(w_a1 * 100, 1),
+            "Asset 2 Weight": round((1 - w_a1) * 100, 1),
+            "Exp. Return":    round(ret, 2),
+            "Std. Dev.":      round(sd, 2),
+            "Sharpe Ratio":   round(sharpe, 3),
         }
 
     # Equal weight stats
@@ -467,11 +467,11 @@ def cal_summary_table(r_risky, sd_risky, rf, allow_short=False):
         ret, sd, sharpe = cal_stats(w, r_risky, sd_risky, rf)
         return {
             "Portfolio":          label,
-            "Risky Asset Weight": f"{w * 100:.1f}%",
-            "Risk-Free Weight":   f"{(1 - w) * 100:.1f}%",
-            "Exp. Return":        f"{ret:.2f}%",
-            "Std. Dev.":          f"{sd:.2f}%",
-            "Sharpe Ratio":       f"{sharpe:.3f}" if sd > 0 else "—",
+            "Risky Asset Weight": round(w * 100, 1),
+            "Risk-Free Weight":   round((1 - w) * 100, 1),
+            "Exp. Return":        round(ret, 2),
+            "Std. Dev.":          round(sd, 2),
+            "Sharpe Ratio":       round(sharpe, 3) if sd > 0 else None,
             "Region":             ("Short" if w < 0
                                    else "Long No Leverage" if w <= 1
                                    else "Long With Leverage"),
