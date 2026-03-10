@@ -1662,11 +1662,11 @@ def chart_n_solver(frontier_df, result_row, mvp, asset_names):
 
 def chart_n_summary_table(frontier_df, asset_names, mvp, max_sr, mu, sd, rf):
     """
-    Plotly table with key N-asset portfolios: 100% each asset, MVP, Max Sharpe.
+    Build a numeric DataFrame of key N-asset portfolios: 100% each asset, MVP, Max Sharpe.
 
     Returns
     -------
-    go.Figure
+    pd.DataFrame  (numeric columns for sortable st.dataframe rendering)
     """
     n      = len(asset_names)
     w_cols = [f"w_{i+1}" for i in range(n)]
@@ -1687,54 +1687,24 @@ def chart_n_summary_table(frontier_df, asset_names, mvp, max_sr, mu, sd, rf):
         rows.append({
             "Portfolio":    f"100% {name}",
             "Weights":      weights_str,
-            "Exp. Return":  f"{mu[i]:.2f}%",
-            "Std. Dev.":    f"{sd[i]:.2f}%",
-            "Sharpe Ratio": f"{sharpe:.3f}",
+            "Exp. Return":  round(mu[i], 2),
+            "Std. Dev.":    round(sd[i], 2),
+            "Sharpe Ratio": round(sharpe, 3),
         })
 
     rows.append({
         "Portfolio":    "⭐ Min. Variance Portfolio (MVP)",
         "Weights":      wstr(mvp),
-        "Exp. Return":  f"{mvp['ret']:.2f}%",
-        "Std. Dev.":    f"{mvp['sd']:.2f}%",
-        "Sharpe Ratio": f"{mvp['sharpe']:.3f}",
+        "Exp. Return":  round(mvp["ret"], 2),
+        "Std. Dev.":    round(mvp["sd"], 2),
+        "Sharpe Ratio": round(mvp["sharpe"], 3),
     })
     rows.append({
         "Portfolio":    "⭐ Max. Sharpe Portfolio (MSP)",
         "Weights":      wstr(max_sr),
-        "Exp. Return":  f"{max_sr['ret']:.2f}%",
-        "Std. Dev.":    f"{max_sr['sd']:.2f}%",
-        "Sharpe Ratio": f"{max_sr['sharpe']:.3f}",
+        "Exp. Return":  round(max_sr["ret"], 2),
+        "Std. Dev.":    round(max_sr["sd"], 2),
+        "Sharpe Ratio": round(max_sr["sharpe"], 3),
     })
 
-    df     = pd.DataFrame(rows)
-    n_cols = len(df.columns)
-    fill   = [
-        "#FFF3CD" if "⭐" in str(r.get("Portfolio", "")) else "#F8F9FA"
-        for _, r in df.iterrows()
-    ]
-
-    fig = go.Figure(data=[go.Table(
-        columnwidth=[200, 350, 110, 100, 110],
-        header=dict(
-            values=[f"<b>{c}</b>" for c in df.columns],
-            fill_color=COLORS["navy"],
-            font=dict(color="white", size=12),
-            align="center", height=36,
-        ),
-        cells=dict(
-            values=[df[c].tolist() for c in df.columns],
-            fill_color=[fill] * n_cols,
-            font=dict(color=COLORS["gray"], size=11),
-            align=["left", "left"] + ["center"] * (n_cols - 2),
-            height=32,
-        ),
-    )])
-    fig.update_layout(
-        title=dict(text="<b>Portfolio Summary — Key Allocation Points</b>",
-                   font=dict(size=14, color=COLORS["navy"]),
-                   x=0, xanchor="left"),
-        margin=dict(t=60, b=20, l=0, r=0),
-        paper_bgcolor=COLORS["white"],
-    )
-    return fig
+    return pd.DataFrame(rows)

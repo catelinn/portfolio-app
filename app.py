@@ -38,8 +38,6 @@ from charts import (
     chart_rho_effect,
     chart_rho_mvp_table,
     chart_rho_msp_table,
-    chart_frontier_summary_table,
-    chart_cal_summary_table,
     chart_frontier_with_solver,
     # N-asset
     chart_n_frontier, chart_n_weights_bar, chart_n_heatmap,
@@ -479,7 +477,7 @@ st.markdown(
 tab_cal, tab_two, tab_n = st.tabs([
     "📈  Capital Allocation Line",
     "📊  Two Risky Assets",
-    "🧮  N-Asset Portfolio",
+    "🧮  N Assets",
 ])
 
 
@@ -663,9 +661,17 @@ with tab_cal:
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
     st.markdown("#### CAL Summary Table")
-    st.plotly_chart(
-        chart_cal_summary_table(c_summary_tbl),
-        use_container_width=True, key="c_summary_tbl"
+    st.dataframe(
+        c_summary_tbl,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Risky Asset Weight": st.column_config.NumberColumn("Risky Asset Weight", format="%.1f%%"),
+            "Risk-Free Weight":   st.column_config.NumberColumn("Risk-Free Weight",   format="%.1f%%"),
+            "Exp. Return":        st.column_config.NumberColumn("Exp. Return",        format="%.2f%%"),
+            "Std. Dev.":          st.column_config.NumberColumn("Std. Dev.",          format="%.2f%%"),
+            "Sharpe Ratio":       st.column_config.NumberColumn("Sharpe Ratio",       format="%.3f"),
+        },
     )
 
 
@@ -951,9 +957,17 @@ with tab_two:
 
         # ── SUMMARY TABLE ─────────────────────────────────────────────────────
         st.markdown("#### Portfolio Summary Table")
-        st.plotly_chart(
-            chart_frontier_summary_table(f_summary_tbl),
-            use_container_width=True, key="f_summary_tbl"
+        st.dataframe(
+            f_summary_tbl,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Asset 1 Weight": st.column_config.NumberColumn("Asset 1 Weight", format="%.1f%%"),
+                "Asset 2 Weight": st.column_config.NumberColumn("Asset 2 Weight", format="%.1f%%"),
+                "Exp. Return":    st.column_config.NumberColumn("Exp. Return",    format="%.2f%%"),
+                "Std. Dev.":      st.column_config.NumberColumn("Std. Dev.",      format="%.2f%%"),
+                "Sharpe Ratio":   st.column_config.NumberColumn("Sharpe Ratio",   format="%.3f"),
+            },
         )
 
     # ── INNER SUB-TAB 2: Correlation Effect ──────────────────────────────────
@@ -1303,7 +1317,7 @@ with tab_n:
 
     _N_SUB_OPTS = [
         "📋  Assets",
-        "📉  Efficient Frontier",
+        "📉  Portfolio Frontier",
         "🎯  Solver",
         "🔗  Correlation Effect",
     ]
@@ -1731,9 +1745,15 @@ with tab_n:
 
             # ── Summary table ─────────────────────────────────────────────
             st.markdown("#### Summary Table")
-            st.plotly_chart(
+            st.dataframe(
                 chart_n_summary_table(_n_frontier_df, _n_names, _n_mvp, _n_max_sr, _n_mu, _n_sd, _n_rf),
-                use_container_width=True, key="n_summary_table",
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Exp. Return":  st.column_config.NumberColumn("Exp. Return",  format="%.2f%%"),
+                    "Std. Dev.":    st.column_config.NumberColumn("Std. Dev.",    format="%.2f%%"),
+                    "Sharpe Ratio": st.column_config.NumberColumn("Sharpe Ratio", format="%.3f"),
+                },
             )
 
     # ════════════════════════════════════════════════════════════════════════
@@ -1950,36 +1970,3 @@ with tab_n:
 
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-        # ── Concept & calculation explainer ───────────────────────────────
-        st.markdown("#### Correlation Scalar (κ) — Concept & Calculation")
-        st.markdown(
-            "**What is κ?**\n\n"
-            "κ (kappa) is a single number in the range [0, 1] that uniformly scales every "
-            "pairwise correlation in the matrix, while leaving each asset's own variance "
-            "completely unchanged.\n\n"
-            "**Formula**\n\n"
-            "The scaled covariance matrix is constructed as:\n\n"
-            "```\n"
-            "Cov(κ) = D · [ κ·C + (1 − κ)·I ] · D\n"
-            "```\n\n"
-            "| Symbol | Meaning |\n"
-            "|---|---|\n"
-            "| `D` | Diagonal matrix of asset standard deviations (σ₁, σ₂, …) |\n"
-            "| `C` | Original correlation matrix (your full input) |\n"
-            "| `I` | Identity matrix — represents zero off-diagonal correlation |\n"
-            "| `κ` | Scalar ∈ [0, 1] controlling how much of C is used |\n\n"
-            "**Effect on each element**\n\n"
-            "Every off-diagonal correlation becomes `κ · ρᵢⱼ`. "
-            "Diagonal entries (own-variance) are never touched by κ.\n\n"
-            "**Worked example** (using your current matrix):\n\n"
-            "| κ | ρ(A,B) used | ρ(A,C) used | ρ(B,C) used |\n"
-            "|---|---|---|---|\n"
-            "| 0.00 | 0.00 | 0.00 | 0.00 |\n"
-            "| 0.25 | 0.05 | 0.025 | 0.075 |\n"
-            "| 0.50 | 0.10 | 0.05 | 0.15 |\n"
-            "| 0.75 | 0.15 | 0.075 | 0.225 |\n"
-            "| 1.00 | 0.20 | 0.10 | 0.30 |\n\n"
-            "> **Note:** The worked example above assumes the default three-asset correlations "
-            "ρ(A,B) = 0.20, ρ(A,C) = 0.10, ρ(B,C) = 0.30. "
-            "If you change the correlation matrix, the scaled values will differ accordingly."
-        )
