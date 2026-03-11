@@ -2008,7 +2008,7 @@ with tab_capm:
                 "20 years (240 months)": 240,
             }
             _period_label = st.selectbox(
-                "Estimation Period",
+                "Data Period",
                 options=list(_period_options.keys()),
                 index=2,  # default = 5 years
                 key="capm_period_label",
@@ -2155,18 +2155,26 @@ with tab_capm:
                                     _reg["beta_upper"], _reg["r_squared"],
                                     _reg["alpha_annual"], _miss)
 
-            # ══════════════════════════════════════════════════════════════
-            # SECTION 8: SUMMARY INTERPRETATION CARD
-            # ══════════════════════════════════════════════════════════════
-            _verdict_color = {
-                "Defensive outperformer": "#1E6B3A",
-                "Aggressive outperformer": "#2E75B6",
-                "Fairly priced": "#595959",
-                "Defensive underperformer": "#E8A020",
-                "Worst case": "#C00000",
-            }.get(_card["verdict_title"], "#595959")
+            # ── Sub-tabs: Regression vs Projection ─────────────────────
+            _subtab_reg, _subtab_proj = st.tabs([
+                "📊 CAPM Regression",
+                "🔮 CAPM Projection",
+            ])
 
-            st.markdown(f"""
+            with _subtab_reg:
+
+                # ══════════════════════════════════════════════════════════
+                # SECTION 8: SUMMARY INTERPRETATION CARD
+                # ══════════════════════════════════════════════════════════
+                _verdict_color = {
+                    "Defensive outperformer": "#1E6B3A",
+                    "Aggressive outperformer": "#2E75B6",
+                    "Fairly priced": "#595959",
+                    "Defensive underperformer": "#E8A020",
+                    "Worst case": "#C00000",
+                }.get(_card["verdict_title"], "#595959")
+
+                st.markdown(f"""
 <div style="background: linear-gradient(135deg, #F2F7FC, #E8F0FE);
             border: 2px solid #1F4E79; border-radius: 12px;
             padding: 20px 24px; margin-bottom: 1.5rem;">
@@ -2191,234 +2199,234 @@ with tab_capm:
 </div>
 """, unsafe_allow_html=True)
 
-            # ══════════════════════════════════════════════════════════════
-            # SECTION 7: WARNINGS
-            # ══════════════════════════════════════════════════════════════
-            for _lvl, _msg in _warns:
-                if _lvl == "warning":
-                    st.warning(_msg)
+                # ══════════════════════════════════════════════════════════
+                # SECTION 7: WARNINGS
+                # ══════════════════════════════════════════════════════════
+                for _lvl, _msg in _warns:
+                    if _lvl == "warning":
+                        st.warning(_msg)
+                    else:
+                        st.info(_msg)
+
+                st.markdown(
+                    f"<div class='info-box'>📅 <b>Data range:</b> "
+                    f"{_start} – {_end} ({_n_mo} months)<br>"
+                    f"📈 <b>Market proxy:</b> {_mkt_px}<br>"
+                    f"💰 <b>Risk-free rate:</b> {_rf_src}</div>",
+                    unsafe_allow_html=True,
+                )
+
+                st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+                # ══════════════════════════════════════════════════════════
+                # SECTION 2: REGRESSION & CORE STATISTICS
+                # ══════════════════════════════════════════════════════════
+                st.markdown("#### Regression & Core Statistics")
+
+                _m1, _m2, _m3, _m4 = st.columns(4)
+                with _m1:
+                    st.metric("Beta (β)", f"{_reg['beta']:.3f}",
+                              help="Slope of the CAPM regression")
+                with _m2:
+                    st.metric("Alpha (α, monthly)", f"{_reg['alpha']*100:.3f}%",
+                              help="Regression intercept — monthly excess return")
+                with _m3:
+                    st.metric("R²", f"{_reg['r_squared']:.3f}",
+                              help="Fraction of stock variance explained by market")
+                with _m4:
+                    st.metric("Idiosyncratic Risk", f"{_reg['idio_risk']:.3f}",
+                              help="1 − R² — firm-specific, unpriced risk")
+
+                _m5, _m6, _m7 = st.columns(3)
+                with _m5:
+                    st.metric("Alpha (annualised)",
+                              f"{_reg['alpha_annual']*100:+.2f}%")
+                with _m6:
+                    st.metric(f"Sharpe Ratio ({_ticker})",
+                              f"{_reg['stock_sharpe']:.3f}")
+                with _m7:
+                    st.metric("Sharpe Ratio (Market)",
+                              f"{_reg['mkt_sharpe']:.3f}")
+
+                _m8, _m9 = st.columns(2)
+                with _m8:
+                    st.metric(f"Std Dev ({_ticker}, annualised)",
+                              f"{_reg['stock_sd_yr']*100:.2f}%")
+                with _m9:
+                    st.metric("Std Dev (Market, annualised)",
+                              f"{_reg['mkt_sd_yr']*100:.2f}%")
+
+                # 95% CI on Beta
+                _ci_width = _reg["beta_upper"] - _reg["beta_lower"]
+                st.markdown(
+                    f"**95% CI on Beta:** [{_reg['beta_lower']:.3f}, "
+                    f"{_reg['beta_upper']:.3f}] "
+                    f"(width = {_ci_width:.3f})",
+                )
+                st.caption(
+                    "We are 95% confident the true beta lies in this range. "
+                    "Wider interval = less reliable estimate — "
+                    "consider using a longer period."
+                )
+
+                st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+                # ══════════════════════════════════════════════════════════
+                # SECTION 3: BETA INTERPRETATION
+                # ══════════════════════════════════════════════════════════
+                st.markdown("#### Beta Interpretation")
+
+                _bi_cols = st.columns(3)
+                with _bi_cols[0]:
+                    st.metric("Category", _interp["category"])
+                with _bi_cols[1]:
+                    st.metric("Market Sensitivity", _interp["sensitivity"])
+                with _bi_cols[2]:
+                    st.metric("Implication", _interp["implication"])
+
+                st.markdown(f"> {_interp['portfolio_equiv']}")
+
+                st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+                # ══════════════════════════════════════════════════════════
+                # SECTION 4: RETURN DECOMPOSITION
+                # ══════════════════════════════════════════════════════════
+                st.markdown("#### Return Decomposition")
+
+                _decomp_data = {
+                    "Component": [
+                        "Risk-free rate",
+                        "Risk compensation (β × market premium)",
+                        "Alpha (α)",
+                        "**Total average return**",
+                    ],
+                    "Monthly": [
+                        f"{_decomp['rf_mo']*100:.3f}%",
+                        f"{_decomp['risk_comp_mo']*100:.3f}%",
+                        f"{_decomp['alpha_mo']*100:.3f}%",
+                        f"**{_decomp['total_mo']*100:.3f}%**",
+                    ],
+                    "Annualised": [
+                        f"{_decomp['rf_yr']*100:.2f}%",
+                        f"{_decomp['risk_comp_yr']*100:.2f}%",
+                        f"{_decomp['alpha_yr']*100:.2f}%",
+                        f"**{_decomp['total_yr']*100:.2f}%**",
+                    ],
+                }
+                st.table(pd.DataFrame(_decomp_data))
+
+                # Auto-generated interpretation
+                _alpha_yr_pct = _decomp["alpha_yr"] * 100
+                _total_yr_pct = _decomp["total_yr"] * 100
+                _risk_pct = (_decomp["risk_comp_yr"] / _decomp["total_yr"] * 100
+                             if abs(_decomp["total_yr"]) > 1e-8 else 0)
+                _alpha_pct_of_total = (_decomp["alpha_yr"] / _decomp["total_yr"] * 100
+                                       if abs(_decomp["total_yr"]) > 1e-8 else 0)
+
+                if _alpha_yr_pct > 0.5:
+                    st.markdown(
+                        f"> Approximately **{_risk_pct:.0f}%** of this stock's return "
+                        f"compensates for market risk, and **{_alpha_pct_of_total:.0f}%** "
+                        f"represents outperformance above its CAPM benchmark (positive alpha)."
+                    )
+                elif _alpha_yr_pct < -0.5:
+                    st.markdown(
+                        f"> This stock underperforms its CAPM benchmark by "
+                        f"**{abs(_alpha_yr_pct):.1f}%/yr**. It delivers less return "
+                        f"than its beta level warrants."
+                    )
                 else:
-                    st.info(_msg)
-
-            st.markdown(
-                f"<div class='info-box'>📅 <b>Data range:</b> "
-                f"{_start} – {_end} ({_n_mo} months)<br>"
-                f"📈 <b>Market proxy:</b> {_mkt_px}<br>"
-                f"💰 <b>Risk-free rate:</b> {_rf_src}</div>",
-                unsafe_allow_html=True,
-            )
-
-            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-            # ══════════════════════════════════════════════════════════════
-            # SECTION 2: REGRESSION & CORE STATISTICS
-            # ══════════════════════════════════════════════════════════════
-            st.markdown("#### Regression & Core Statistics")
-
-            _m1, _m2, _m3, _m4 = st.columns(4)
-            with _m1:
-                st.metric("Beta (β)", f"{_reg['beta']:.3f}",
-                          help="Slope of the CAPM regression")
-            with _m2:
-                st.metric("Alpha (α, monthly)", f"{_reg['alpha']*100:.3f}%",
-                          help="Regression intercept — monthly excess return")
-            with _m3:
-                st.metric("R²", f"{_reg['r_squared']:.3f}",
-                          help="Fraction of stock variance explained by market")
-            with _m4:
-                st.metric("Idiosyncratic Risk", f"{_reg['idio_risk']:.3f}",
-                          help="1 − R² — firm-specific, unpriced risk")
-
-            _m5, _m6, _m7 = st.columns(3)
-            with _m5:
-                st.metric("Alpha (annualised)",
-                          f"{_reg['alpha_annual']*100:+.2f}%")
-            with _m6:
-                st.metric(f"Sharpe Ratio ({_ticker})",
-                          f"{_reg['stock_sharpe']:.3f}")
-            with _m7:
-                st.metric("Sharpe Ratio (Market)",
-                          f"{_reg['mkt_sharpe']:.3f}")
-
-            _m8, _m9 = st.columns(2)
-            with _m8:
-                st.metric(f"Std Dev ({_ticker}, annualised)",
-                          f"{_reg['stock_sd_yr']*100:.2f}%")
-            with _m9:
-                st.metric("Std Dev (Market, annualised)",
-                          f"{_reg['mkt_sd_yr']*100:.2f}%")
-
-            # 95% CI on Beta
-            _ci_width = _reg["beta_upper"] - _reg["beta_lower"]
-            st.markdown(
-                f"**95% CI on Beta:** [{_reg['beta_lower']:.3f}, "
-                f"{_reg['beta_upper']:.3f}] "
-                f"(width = {_ci_width:.3f})",
-            )
-            st.caption(
-                "We are 95% confident the true beta lies in this range. "
-                "Wider interval = less reliable estimate — "
-                "consider using a longer period."
-            )
-
-            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-            # ══════════════════════════════════════════════════════════════
-            # SECTION 3: BETA INTERPRETATION
-            # ══════════════════════════════════════════════════════════════
-            st.markdown("#### Beta Interpretation")
-
-            _bi_cols = st.columns(3)
-            with _bi_cols[0]:
-                st.metric("Category", _interp["category"])
-            with _bi_cols[1]:
-                st.metric("Market Sensitivity", _interp["sensitivity"])
-            with _bi_cols[2]:
-                st.metric("Implication", _interp["implication"])
-
-            st.markdown(f"> {_interp['portfolio_equiv']}")
-
-            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-            # ══════════════════════════════════════════════════════════════
-            # SECTION 4: RETURN DECOMPOSITION
-            # ══════════════════════════════════════════════════════════════
-            st.markdown("#### Return Decomposition")
-
-            _decomp_data = {
-                "Component": [
-                    "Risk-free rate",
-                    "Risk compensation (β × market premium)",
-                    "Alpha (α)",
-                    "**Total average return**",
-                ],
-                "Monthly": [
-                    f"{_decomp['rf_mo']*100:.3f}%",
-                    f"{_decomp['risk_comp_mo']*100:.3f}%",
-                    f"{_decomp['alpha_mo']*100:.3f}%",
-                    f"**{_decomp['total_mo']*100:.3f}%**",
-                ],
-                "Annualised": [
-                    f"{_decomp['rf_yr']*100:.2f}%",
-                    f"{_decomp['risk_comp_yr']*100:.2f}%",
-                    f"{_decomp['alpha_yr']*100:.2f}%",
-                    f"**{_decomp['total_yr']*100:.2f}%**",
-                ],
-            }
-            st.table(pd.DataFrame(_decomp_data))
-
-            # Auto-generated interpretation
-            _alpha_yr_pct = _decomp["alpha_yr"] * 100
-            _total_yr_pct = _decomp["total_yr"] * 100
-            _risk_pct = (_decomp["risk_comp_yr"] / _decomp["total_yr"] * 100
-                         if abs(_decomp["total_yr"]) > 1e-8 else 0)
-            _alpha_pct_of_total = (_decomp["alpha_yr"] / _decomp["total_yr"] * 100
-                                   if abs(_decomp["total_yr"]) > 1e-8 else 0)
-
-            if _alpha_yr_pct > 0.5:
-                st.markdown(
-                    f"> Approximately **{_risk_pct:.0f}%** of this stock's return "
-                    f"compensates for market risk, and **{_alpha_pct_of_total:.0f}%** "
-                    f"represents outperformance above its CAPM benchmark (positive alpha)."
-                )
-            elif _alpha_yr_pct < -0.5:
-                st.markdown(
-                    f"> This stock underperforms its CAPM benchmark by "
-                    f"**{abs(_alpha_yr_pct):.1f}%/yr**. It delivers less return "
-                    f"than its beta level warrants."
-                )
-            else:
-                st.markdown(
-                    "> This stock performs in line with its CAPM benchmark — "
-                    "consistent with a fairly priced or passively managed security."
-                )
-
-            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-            # ══════════════════════════════════════════════════════════════
-            # SECTION 5: CHARTS
-            # ══════════════════════════════════════════════════════════════
-            st.markdown("#### Chart A — CAPM Scatter Plot (Regression)")
-            st.plotly_chart(
-                chart_capm_scatter(_df, _reg, _ticker, market_proxy=_mkt_px),
-                use_container_width=True, key="capm_scatter",
-            )
-
-            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-            st.markdown("#### Chart B — Security Market Line (SML)")
-            st.plotly_chart(
-                chart_capm_sml(_reg, _ticker, _decomp, market_proxy=_mkt_px),
-                use_container_width=True, key="capm_sml",
-            )
-
-            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-            # ══════════════════════════════════════════════════════════════
-            # SECTION 6: FORWARD PROJECTION
-            # ══════════════════════════════════════════════════════════════
-            st.markdown("#### Forward Projection (CAPM Required Return)")
-
-            with st.expander("⚙️ Projection Parameters", expanded=True):
-                _fp1, _fp2, _fp3 = st.columns(3)
-                with _fp1:
-                    _proj_beta = st.number_input(
-                        "Beta (β)", value=round(_reg["beta"], 3),
-                        min_value=-1.0, max_value=5.0, step=0.01,
-                        format="%.3f", key="capm_proj_beta",
-                        help="Adjust beta if you believe the estimate should differ",
-                    )
-                with _fp2:
-                    _horizon_options = {
-                        "Short (1–3 yr) — T-Bill rate":     "short",
-                        "Medium (5–10 yr) — Treasury yield": "medium",
-                        "Long (10–30 yr) — Treasury yield":  "long",
-                    }
-                    _proj_horizon = st.selectbox(
-                        "Projection Horizon",
-                        options=list(_horizon_options.keys()),
-                        index=0, key="capm_proj_horizon",
+                    st.markdown(
+                        "> This stock performs in line with its CAPM benchmark — "
+                        "consistent with a fairly priced or passively managed security."
                     )
 
-                    # Default RF rates by horizon
-                    _rf_defaults = {
-                        "short":  _decomp["rf_yr"] * 100,
-                        "medium": _decomp["rf_yr"] * 100 + 0.5,
-                        "long":   _decomp["rf_yr"] * 100 + 1.0,
-                    }
-                    _horizon_key = _horizon_options[_proj_horizon]
-                    _default_rf = _rf_defaults[_horizon_key]
+                st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-                with _fp3:
-                    _proj_rf = st.number_input(
-                        "Risk-Free Rate (%/yr)", value=round(_default_rf, 2),
-                        min_value=0.0, max_value=20.0, step=0.1,
-                        format="%.2f", key="capm_proj_rf",
-                        help="Match RF maturity to your projection horizon",
+                # ══════════════════════════════════════════════════════════
+                # SECTION 5: CHARTS
+                # ══════════════════════════════════════════════════════════
+                st.markdown("#### Chart A — CAPM Scatter Plot (Regression)")
+                st.plotly_chart(
+                    chart_capm_scatter(_df, _reg, _ticker, market_proxy=_mkt_px),
+                    use_container_width=True, key="capm_scatter",
+                )
+
+                st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+                st.markdown("#### Chart B — Security Market Line (SML)")
+                st.plotly_chart(
+                    chart_capm_sml(_reg, _ticker, _decomp, market_proxy=_mkt_px),
+                    use_container_width=True, key="capm_sml",
+                )
+
+            with _subtab_proj:
+
+                # ══════════════════════════════════════════════════════════
+                # SECTION 6: FORWARD PROJECTION
+                # ══════════════════════════════════════════════════════════
+                st.markdown("#### Forward Projection (CAPM Required Return)")
+
+                with st.expander("⚙️ Projection Parameters", expanded=True):
+                    _fp1, _fp2, _fp3 = st.columns(3)
+                    with _fp1:
+                        _proj_beta = st.number_input(
+                            "Beta (β)", value=round(_reg["beta"], 3),
+                            min_value=-1.0, max_value=5.0, step=0.01,
+                            format="%.3f", key="capm_proj_beta",
+                            help="Adjust beta if you believe the estimate should differ",
+                        )
+                    with _fp2:
+                        _horizon_options = {
+                            "Short (1–3 yr) — T-Bill rate":     "short",
+                            "Medium (5–10 yr) — Treasury yield": "medium",
+                            "Long (10–30 yr) — Treasury yield":  "long",
+                        }
+                        _proj_horizon = st.selectbox(
+                            "Projection Horizon",
+                            options=list(_horizon_options.keys()),
+                            index=0, key="capm_proj_horizon",
+                        )
+
+                        # Default RF rates by horizon
+                        _rf_defaults = {
+                            "short":  _decomp["rf_yr"] * 100,
+                            "medium": _decomp["rf_yr"] * 100 + 0.5,
+                            "long":   _decomp["rf_yr"] * 100 + 1.0,
+                        }
+                        _horizon_key = _horizon_options[_proj_horizon]
+                        _default_rf = _rf_defaults[_horizon_key]
+
+                    with _fp3:
+                        _proj_rf = st.number_input(
+                            "Risk-Free Rate (%/yr)", value=round(_default_rf, 2),
+                            min_value=0.0, max_value=20.0, step=0.1,
+                            format="%.2f", key="capm_proj_rf",
+                            help="Match RF maturity to your projection horizon",
+                        )
+
+                    _proj_mkt_prem = st.number_input(
+                        "Market Risk Premium (%/yr)",
+                        value=round(_decomp["mkt_premium_mo"] * 1200, 2),
+                        min_value=-10.0, max_value=30.0, step=0.1,
+                        format="%.2f", key="capm_proj_mkt_prem",
+                        help="Historical average from the selected period",
                     )
 
-                _proj_mkt_prem = st.number_input(
-                    "Market Risk Premium (%/yr)",
-                    value=round(_decomp["mkt_premium_mo"] * 1200, 2),
-                    min_value=-10.0, max_value=30.0, step=0.1,
-                    format="%.2f", key="capm_proj_mkt_prem",
-                    help="Historical average from the selected period",
+                # Horizon mismatch warning
+                _period_yrs = capm_months / 12
+                if (_horizon_key == "long" and _period_yrs < 10):
+                    st.warning(
+                        f"You are using a long-term projection horizon with only "
+                        f"{_period_yrs:.0f} years of data. Prof. Weisbenner recommends "
+                        f"matching the RF maturity to your projection horizon."
+                    )
+
+                _fwd = forward_projection(
+                    _proj_beta, _proj_rf / 100, _proj_mkt_prem / 100
                 )
 
-            # Horizon mismatch warning
-            _period_yrs = capm_months / 12
-            if (_horizon_key == "long" and _period_yrs < 10):
-                st.warning(
-                    f"You are using a long-term projection horizon with only "
-                    f"{_period_yrs:.0f} years of data. Prof. Weisbenner recommends "
-                    f"matching the RF maturity to your projection horizon."
-                )
-
-            _fwd = forward_projection(
-                _proj_beta, _proj_rf / 100, _proj_mkt_prem / 100
-            )
-
-            st.markdown(f"""
+                st.markdown(f"""
 <div style="background: #F2F7FC; border: 2px solid #2E75B6;
             border-radius: 10px; padding: 16px 20px; margin-top: 0.5rem;">
     <p style="font-size:1.1rem; margin:0 0 6px 0; color:#1F4E79;">
@@ -2434,8 +2442,6 @@ with tab_capm:
     </p>
 </div>
 """, unsafe_allow_html=True)
-
-            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
     else:
         st.markdown(
             "<div class='info-box'>ℹ️ Enter a stock ticker and click "
