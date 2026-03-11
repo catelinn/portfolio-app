@@ -1991,7 +1991,7 @@ with tab_capm:
     st.markdown("<div class='param-banner'>⚙️ Parameters — CAPM Analysis</div>",
                 unsafe_allow_html=True)
     with st.expander("⚙️ Parameters — CAPM Analysis", expanded=True):
-        _cp1, _cp2 = st.columns(2)
+        _cp1, _cp2, _cp3 = st.columns(3)
         with _cp1:
             capm_ticker = st.text_input(
                 "Stock Ticker",
@@ -2015,6 +2015,26 @@ with tab_capm:
                 help="Prof. Weisbenner recommends 3–5 years as the typical window",
             )
             capm_months = _period_options[_period_label]
+        with _cp3:
+            _proxy_options = {
+                "SPY — S&P 500":           "SPY",
+                "QQQ — Nasdaq-100":        "QQQ",
+                "IWM — Russell 2000":      "IWM",
+                "VTI — Total US Market":   "VTI",
+                "EFA — Intl Developed":    "EFA",
+            }
+            _proxy_label = st.selectbox(
+                "Market Proxy",
+                options=list(_proxy_options.keys()),
+                index=0,  # default = SPY
+                key="capm_market_proxy",
+                help=(
+                    "Choose which ETF represents 'the market' in the CAPM regression. "
+                    "Different proxies can yield different beta estimates. "
+                    "SPY (S&P 500) is the most common academic choice."
+                ),
+            )
+            capm_market_proxy = _proxy_options[_proxy_label]
 
         # ── Risk-Free Rate source ─────────────────────────────────────────
         _rf_col1, _rf_col2 = st.columns([1, 1])
@@ -2052,14 +2072,22 @@ with tab_capm:
                              use_container_width=True, key="capm_run_btn")
 
     # ── Data source description ───────────────────────────────────────────
+    _proxy_descriptions = {
+        "SPY": "S&P 500 ETF — tracks the 500 largest US companies",
+        "QQQ": "Nasdaq-100 ETF — tracks the 100 largest non-financial Nasdaq companies",
+        "IWM": "Russell 2000 ETF — tracks US small-cap stocks",
+        "VTI": "Total US Stock Market ETF — tracks the entire US equity market",
+        "EFA": "International Developed Markets ETF — tracks large/mid-cap stocks in developed markets outside the US",
+    }
+    _proxy_desc = _proxy_descriptions.get(capm_market_proxy, "User-selected market proxy")
     with st.expander("📋 Data Sources", expanded=False):
         st.markdown(
             "| Data Series | Source | Ticker | Description |\n"
             "|---|---|---|---|\n"
             "| **Stock Returns** | Yahoo Finance | *(user-entered)* | "
             "Monthly adjusted close prices → percentage returns |\n"
-            "| **Market Proxy** | Yahoo Finance | `SPY` | "
-            "S&P 500 ETF — standard broad-market proxy for the CAPM market portfolio |\n"
+            f"| **Market Proxy** | Yahoo Finance | `{capm_market_proxy}` | "
+            f"{_proxy_desc} |\n"
             "| **Risk-Free Rate** | Yahoo Finance | `^IRX` | "
             "CBOE 13-Week Treasury Bill Index — annualised yield, "
             "converted to monthly: `rf_mo = (^IRX / 100) / 12` |\n"
@@ -2076,9 +2104,9 @@ with tab_capm:
             "- When **Manual Entry** is selected, a fixed flat rate replaces "
             "`^IRX` for all months (useful for stress-testing or when "
             "T-bill data is unavailable).\n"
-            "- **Market proxy choice**: SPY tracks the S&P 500 index. "
-            "Alternatives include VTI (total US market) or a global index. "
-            "The choice of proxy can affect beta estimates."
+            f"- **Market proxy choice**: `{capm_market_proxy}` — {_proxy_desc}. "
+            "The choice of proxy can affect beta estimates. "
+            "SPY (S&P 500) is the most common academic choice."
         )
 
     # ── Warn if period < 3 years ──────────────────────────────────────────────
@@ -2092,14 +2120,15 @@ with tab_capm:
 
     # ── Fetch & compute (cached) ──────────────────────────────────────────────
     @st.cache_data(ttl=3600, show_spinner="Fetching market data…")
-    def _cached_capm_fetch(ticker, months, rf_override):
-        return fetch_capm_data(ticker, months, rf_override=rf_override)
+    def _cached_capm_fetch(ticker, months, rf_override, market_proxy):
+        return fetch_capm_data(ticker, months, rf_override=rf_override,
+                               market_proxy=market_proxy)
 
     if capm_run or st.session_state.get("capm_result") is not None:
         # Fetch data (or use cached)
         if capm_run:
             _data = _cached_capm_fetch(capm_ticker.strip().upper(), capm_months,
-                                       capm_rf_override)
+                                       capm_rf_override, capm_market_proxy)
             st.session_state["capm_result"] = _data
         else:
             _data = st.session_state["capm_result"]
@@ -2109,6 +2138,7 @@ with tab_capm:
         else:
             _df      = _data["df"]
             _ticker  = _data["ticker"]
+            _mkt_px  = _data.get("market_proxy", "SPY")
             _start   = _data["start_date"]
             _end     = _data["end_date"]
             _n_mo    = _data["n_months"]
@@ -2173,6 +2203,7 @@ with tab_capm:
             st.markdown(
                 f"<div class='info-box'>📅 <b>Data range:</b> "
                 f"{_start} – {_end} ({_n_mo} months)<br>"
+                f"📈 <b>Market proxy:</b> {_mkt_px}<br>"
                 f"💰 <b>Risk-free rate:</b> {_rf_src}</div>",
                 unsafe_allow_html=True,
             )
@@ -2309,7 +2340,7 @@ with tab_capm:
             # ══════════════════════════════════════════════════════════════
             st.markdown("#### Chart A — CAPM Scatter Plot (Regression)")
             st.plotly_chart(
-                chart_capm_scatter(_df, _reg, _ticker),
+                chart_capm_scatter(_df, _reg, _ticker, market_proxy=_mkt_px),
                 use_container_width=True, key="capm_scatter",
             )
 
@@ -2317,7 +2348,7 @@ with tab_capm:
 
             st.markdown("#### Chart B — Security Market Line (SML)")
             st.plotly_chart(
-                chart_capm_sml(_reg, _ticker, _decomp),
+                chart_capm_sml(_reg, _ticker, _decomp, market_proxy=_mkt_px),
                 use_container_width=True, key="capm_sml",
             )
 

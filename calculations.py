@@ -1090,31 +1090,33 @@ def _annualise_monthly(monthly_rate):
     return (1 + monthly_rate) ** 12 - 1
 
 
-def fetch_capm_data(ticker, months=60, rf_override=None):
+def fetch_capm_data(ticker, months=60, rf_override=None, market_proxy="SPY"):
     """
-    Fetch monthly returns for a stock, market proxy (SPY), and risk-free rate.
+    Fetch monthly returns for a stock, market proxy, and risk-free rate.
 
     Parameters
     ----------
-    ticker      : str    Stock ticker (e.g. 'KO', 'AAPL')
-    months      : int    Number of months of history (24, 36, 60, 120, 240)
-    rf_override : float or None
+    ticker       : str    Stock ticker (e.g. 'KO', 'AAPL')
+    months       : int    Number of months of history (24, 36, 60, 120, 240)
+    rf_override  : float or None
         If provided, use this annualised rate (decimal, e.g. 0.045 for 4.5%)
         instead of downloading ^IRX.  The rate is converted to a flat
         monthly value: rf_monthly = rf_override / 12.
+    market_proxy : str    Ticker for the market proxy (e.g. 'SPY', 'QQQ', 'VTI')
 
     Returns
     -------
     dict with keys:
-        'df'           : pd.DataFrame with columns [date, stock_ret, mkt_ret, rf,
-                         stock_excess, mkt_excess]
-        'ticker'       : str
-        'start_date'   : str
-        'end_date'     : str
-        'n_months'     : int
-        'missing_pct'  : float (0-100)
-        'rf_source'    : str   description of the RF data source used
-        'error'        : str or None
+        'df'            : pd.DataFrame with columns [date, stock_ret, mkt_ret, rf,
+                          stock_excess, mkt_excess]
+        'ticker'        : str
+        'market_proxy'  : str
+        'start_date'    : str
+        'end_date'      : str
+        'n_months'      : int
+        'missing_pct'   : float (0-100)
+        'rf_source'     : str   description of the RF data source used
+        'error'         : str or None
     """
     import yfinance as yf
 
@@ -1128,9 +1130,11 @@ def fetch_capm_data(ticker, months=60, rf_override=None):
         if stock.empty:
             return {"error": f"No data found for ticker '{ticker}'. Check the symbol."}
 
-        # Fetch SPY as market proxy
-        mkt = yf.download("SPY", start=start_dt, end=end_dt,
+        # Fetch market proxy
+        mkt = yf.download(market_proxy, start=start_dt, end=end_dt,
                           interval="1mo", auto_adjust=True, progress=False)
+        if mkt.empty:
+            return {"error": f"No data found for market proxy '{market_proxy}'. Check the symbol."}
 
         # Fetch 13-week T-bill rate as RF proxy (skip if manual override)
         if rf_override is None:
@@ -1211,14 +1215,15 @@ def fetch_capm_data(ticker, months=60, rf_override=None):
         end_str   = str(end_date)[:7]
 
     return {
-        "df":         df,
-        "ticker":     ticker.upper(),
-        "start_date": start_str,
-        "end_date":   end_str,
-        "n_months":   actual_months,
-        "missing_pct": round(missing_pct, 1),
-        "rf_source":  rf_source,
-        "error":      None,
+        "df":           df,
+        "ticker":       ticker.upper(),
+        "market_proxy": market_proxy.upper(),
+        "start_date":   start_str,
+        "end_date":     end_str,
+        "n_months":     actual_months,
+        "missing_pct":  round(missing_pct, 1),
+        "rf_source":    rf_source,
+        "error":        None,
     }
 
 

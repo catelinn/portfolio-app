@@ -1714,7 +1714,7 @@ def chart_n_summary_table(frontier_df, asset_names, mvp, max_sr, mu, sd, rf):
 # CAPM ANALYSIS CHARTS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def chart_capm_scatter(df, reg, ticker):
+def chart_capm_scatter(df, reg, ticker, market_proxy="SPY"):
     """
     Chart A — CAPM Scatter Plot with regression line.
 
@@ -1739,7 +1739,7 @@ def chart_capm_scatter(df, reg, ticker):
                     line=dict(width=0.5, color=COLORS["navy"])),
         name="Monthly Returns",
         hovertemplate=(
-            "Market Excess: %{x:.2f}%<br>"
+            f"{market_proxy} Excess: " + "%{x:.2f}%<br>"
             "Stock Excess: %{y:.2f}%<br>"
             "<extra></extra>"
         ),
@@ -1761,7 +1761,7 @@ def chart_capm_scatter(df, reg, ticker):
         x=x_range, y=y_ref,
         mode="lines",
         line=dict(color=COLORS["gray"], width=1.5, dash="dash"),
-        name="Market (β=1)",
+        name=f"{market_proxy} (β=1)",
     ))
 
     # Alpha annotation at y-intercept
@@ -1788,16 +1788,16 @@ def chart_capm_scatter(df, reg, ticker):
     )
 
     layout = _base_layout(
-        f"CAPM Regression — {ticker}",
-        "Market Excess Return (monthly %)",
+        f"CAPM Regression — {ticker} vs {market_proxy}",
+        f"{market_proxy} Excess Return (monthly %)",
         "Stock Excess Return (monthly %)",
-        f"Each dot = one month | Regression line slope = β"
+        f"Each dot = one month | Market proxy = {market_proxy} | Regression line slope = β"
     )
     fig.update_layout(**layout)
     return fig
 
 
-def chart_capm_sml(reg, ticker, decomp):
+def chart_capm_sml(reg, ticker, decomp, market_proxy="SPY"):
     """
     Chart B — Security Market Line (SML).
 
@@ -1847,10 +1847,10 @@ def chart_capm_sml(reg, ticker, decomp):
         mode="markers+text",
         marker=dict(size=14, color=COLORS["blue"], symbol="circle",
                     line=dict(width=1.5, color=COLORS["black"])),
-        text=["Market"], textposition="top center",
+        text=[market_proxy], textposition="top center",
         textfont=dict(size=11, color=COLORS["blue"]),
-        name="Market (β=1)",
-        hovertemplate="Market<br>β = 1<br>Return = %{y:.2f}%/yr<extra></extra>",
+        name=f"{market_proxy} (β=1)",
+        hovertemplate=f"{market_proxy}<br>β = 1<br>" + "Return = %{y:.2f}%/yr<extra></extra>",
     ))
 
     # Stock point (β_estimated, actual avg return)
@@ -1905,10 +1905,10 @@ def chart_capm_sml(reg, ticker, decomp):
     )
 
     layout = _base_layout(
-        f"Security Market Line — {ticker}",
+        f"Security Market Line — {ticker} vs {market_proxy}",
         "Beta (β)",
         "Expected Return (annualised %)",
-        "SML: E[r] = rf + β × Market Premium"
+        f"SML: E[r] = rf + β × {market_proxy} Premium"
     )
     layout["margin"]["b"] = 140
     fig.update_layout(**layout)
