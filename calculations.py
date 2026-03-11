@@ -4,11 +4,12 @@ calculations.py
 Pure portfolio math functions — no UI, no Streamlit, no Plotly.
 All functions take parameters and return DataFrames or dicts.
 
-FIN 511 - Investments I: Module 1, Lesson 1-5
+FIN 511 - Investments I: Module 1, Lesson 1-5 & Lesson 2-5/2-6/2-7
 """
 
 import numpy as np
 import pandas as pd
+from datetime import datetime, timedelta
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -1076,3 +1077,458 @@ def parse_n_csv(uploaded_df):
         errors.append("Correlation matrix adjusted to nearest valid PSD matrix.")
 
     return asset_names, mu, sd_arr, corr_matrix, errors
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 8. CAPM ANALYSIS
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── 8a. Data fetching ─────────────────────────────────────────────────────────
+
+def _annualise_monthly(monthly_rate):
+    """Annualise a monthly rate using compounding: (1 + r)^12 - 1."""
+    return (1 + monthly_rate) ** 12 - 1
+
+
+def fetch_capm_data(ticker, months=60):
+    """
+    Fetch monthly returns for a stock, market proxy (SPY), and risk-free rate.
+
+    Parameters
+    ----------
+    ticker : str   Stock ticker (e.g. 'KO', 'AAPL')
+    months : int   Number of months of history (24, 36, 60, 120, 240)
+
+    Returns
+    -------
+    dict with keys:
+        'df'           : pd.DataFrame with columns [date, stock_ret, mkt_ret, rf,
+                         stock_excess, mkt_excess]
+        'ticker'       : str
+        'start_date'   : str
+        'end_date'     : str
+        'n_months'     : int
+        'missing_pct'  : float (0-100)
+        'error'        : str or None
+    """
+    import yfinance as yf
+
+    end_dt   = datetime.now()
+    start_dt = end_dt - timedelta(days=months * 31 + 60)  # extra buffer
+
+    try:
+        # Fetch stock data
+        stock = yf.download(ticker, start=start_dt, end=end_dt,
+                            interval="1mo", auto_adjust=True, progress=False)
+        if stock.empty:
+            return {"error": f"No data found for ticker '{ticker}'. Check the symbol."}
+
+        # Fetch SPY as market proxy
+        mkt = yf.download("SPY", start=start_dt, end=end_dt,
+                          interval="1mo", auto_adjust=True, progress=False)
+
+        # Fetch 13-week T-bill rate as RF proxy
+        tbill = yf.download("^IRX", start=start_dt, end=end_dt,
+                            interval="1mo", auto_adjust=True, progress=False)
+    except Exception as e:
+        return {"error": f"Data download failed: {e}"}
+
+    # Handle MultiIndex columns from yfinance
+    if isinstance(stock.columns, pd.MultiIndex):
+        stock.columns = stock.columns.get_level_values(0)
+    if isinstance(mkt.columns, pd.MultiIndex):
+        mkt.columns = mkt.columns.get_level_values(0)
+    if isinstance(tbill.columns, pd.MultiIndex):
+        tbill.columns = tbill.columns.get_level_values(0)
+
+    # Calculate monthly returns
+    stock_ret = stock["Close"].pct_change().dropna()
+    stock_ret.name = "stock_ret"
+
+    mkt_ret = mkt["Close"].pct_change().dropna()
+    mkt_ret.name = "mkt_ret"
+
+    # RF: ^IRX is annualised %, convert to monthly decimal
+    if not tbill.empty and "Close" in tbill.columns:
+        rf_monthly = (tbill["Close"] / 100) / 12
+        rf_monthly.name = "rf"
+    else:
+        # Fallback: use a flat 0.04/12 if T-bill data unavailable
+        rf_monthly = pd.Series(0.04 / 12, index=stock_ret.index, name="rf")
+
+    # Align all series on the same dates
+    df = pd.DataFrame({
+        "stock_ret": stock_ret,
+        "mkt_ret": mkt_ret,
+        "rf": rf_monthly,
+    }).dropna()
+
+    # Trim to requested number of months
+    if len(df) > months:
+        df = df.iloc[-months:]
+
+    if len(df) < 12:
+        return {"error": f"Only {len(df)} months of data available. Need at least 12."}
+
+    # Excess returns
+    df["stock_excess"] = df["stock_ret"] - df["rf"]
+    df["mkt_excess"]   = df["mkt_ret"] - df["rf"]
+
+    # Reset index for clean date column
+    df = df.reset_index()
+    df.rename(columns={"Date": "date", "index": "date"}, inplace=True)
+    if "date" not in df.columns:
+        df = df.rename(columns={df.columns[0]: "date"})
+
+    # Calculate missing data percentage
+    expected_months = months
+    actual_months = len(df)
+    missing_pct = max(0, (expected_months - actual_months) / expected_months * 100)
+
+    start_date = df["date"].iloc[0]
+    end_date   = df["date"].iloc[-1]
+    if hasattr(start_date, "strftime"):
+        start_str = start_date.strftime("%b %Y")
+        end_str   = end_date.strftime("%b %Y")
+    else:
+        start_str = str(start_date)[:7]
+        end_str   = str(end_date)[:7]
+
+    return {
+        "df":         df,
+        "ticker":     ticker.upper(),
+        "start_date": start_str,
+        "end_date":   end_str,
+        "n_months":   actual_months,
+        "missing_pct": round(missing_pct, 1),
+        "error":      None,
+    }
+
+
+# ── 8b. OLS regression ───────────────────────────────────────────────────────
+
+def run_capm_regression(df):
+    """
+    Run OLS regression: stock_excess = α + β × mkt_excess.
+
+    Parameters
+    ----------
+    df : pd.DataFrame  with columns stock_excess, mkt_excess, stock_ret, mkt_ret, rf
+
+    Returns
+    -------
+    dict with regression results
+    """
+    import statsmodels.api as sm
+
+    Y = df["stock_excess"].values
+    X = sm.add_constant(df["mkt_excess"].values)
+
+    model   = sm.OLS(Y, X).fit()
+    alpha   = model.params[0]      # intercept (monthly)
+    beta    = model.params[1]      # slope
+    r_sq    = model.rsquared
+    beta_se = model.bse[1]
+
+    # 95% confidence interval on beta
+    beta_ci = model.conf_int(alpha=0.05)
+    beta_lower = beta_ci[1, 0]
+    beta_upper = beta_ci[1, 1]
+
+    # Annualised alpha
+    alpha_annual = _annualise_monthly(alpha)
+
+    # Standard deviations
+    stock_sd_monthly = df["stock_ret"].std()
+    mkt_sd_monthly   = df["mkt_ret"].std()
+    stock_sd_annual  = stock_sd_monthly * np.sqrt(12)
+    mkt_sd_annual    = mkt_sd_monthly * np.sqrt(12)
+
+    # Average returns
+    avg_stock_ret = df["stock_ret"].mean()
+    avg_mkt_ret   = df["mkt_ret"].mean()
+    avg_rf        = df["rf"].mean()
+
+    # Sharpe ratios
+    stock_sharpe = ((avg_stock_ret - avg_rf) / stock_sd_monthly
+                    if stock_sd_monthly > 1e-10 else 0.0)
+    mkt_sharpe   = ((avg_mkt_ret - avg_rf) / mkt_sd_monthly
+                    if mkt_sd_monthly > 1e-10 else 0.0)
+
+    return {
+        "beta":          beta,
+        "beta_se":       beta_se,
+        "beta_lower":    beta_lower,
+        "beta_upper":    beta_upper,
+        "alpha":         alpha,           # monthly decimal
+        "alpha_annual":  alpha_annual,     # annual decimal
+        "r_squared":     r_sq,
+        "idio_risk":     1 - r_sq,
+        "stock_sd_mo":   stock_sd_monthly,
+        "stock_sd_yr":   stock_sd_annual,
+        "mkt_sd_mo":     mkt_sd_monthly,
+        "mkt_sd_yr":     mkt_sd_annual,
+        "avg_stock_ret": avg_stock_ret,    # monthly decimal
+        "avg_mkt_ret":   avg_mkt_ret,      # monthly decimal
+        "avg_rf":        avg_rf,           # monthly decimal
+        "stock_sharpe":  stock_sharpe,
+        "mkt_sharpe":    mkt_sharpe,
+        "n_obs":         len(df),
+        "residuals":     model.resid,
+    }
+
+
+# ── 8c. Beta interpretation ──────────────────────────────────────────────────
+
+def interpret_beta(beta):
+    """
+    Return category label, market sensitivity description, and implication.
+
+    Returns
+    -------
+    dict with keys: category, sensitivity, implication, portfolio_equiv
+    """
+    if beta < 0:
+        cat   = "Inverse / Hedge-like"
+        sens  = "Moves opposite to market"
+        impl  = "Like insurance — pays off in bad times. Rare."
+    elif beta < 0.3:
+        cat   = "Very Defensive"
+        sens  = "Barely moves with market"
+        impl  = "Near risk-free behaviour. Very low systematic risk."
+    elif beta < 0.8:
+        cat   = "Defensive"
+        sens  = "Moves less than market"
+        impl  = "Lower risk than market. Typical of consumer staples, utilities."
+    elif beta <= 1.1:
+        cat   = "Market-like"
+        sens  = "Moves with market"
+        impl  = "Same systematic risk as holding the broad index."
+    elif beta <= 1.5:
+        cat   = "Aggressive"
+        sens  = "Amplifies market moves"
+        impl  = "Higher risk and higher required return than market."
+    else:
+        cat   = "Highly Aggressive"
+        sens  = "Strongly amplifies market"
+        impl  = "Leveraged-like exposure. Significant downside in bad markets."
+
+    # Portfolio-equivalent label
+    if beta <= 1.0:
+        pct_stocks = beta * 100
+        pct_tbills = (1 - beta) * 100
+        port_equiv = (
+            f"A β of {beta:.2f} means this stock has the same market risk as "
+            f"a portfolio of **{pct_stocks:.0f}% US stocks + {pct_tbills:.0f}% T-Bills**."
+        )
+    else:
+        pct_stocks  = beta * 100
+        pct_borrow  = (beta - 1) * 100
+        port_equiv = (
+            f"A β of {beta:.2f} is equivalent to borrowing "
+            f"**{pct_borrow:.0f}%** and investing **{pct_stocks:.0f}%** "
+            f"in the market (leveraged)."
+        )
+
+    return {
+        "category":     cat,
+        "sensitivity":  sens,
+        "implication":  impl,
+        "portfolio_equiv": port_equiv,
+    }
+
+
+# ── 8d. Return decomposition ─────────────────────────────────────────────────
+
+def decompose_returns(reg):
+    """
+    Three-component breakdown of the stock's average monthly return.
+
+    Parameters
+    ----------
+    reg : dict  output of run_capm_regression()
+
+    Returns
+    -------
+    dict with monthly and annual values for rf, risk_comp, alpha, total
+    """
+    avg_rf       = reg["avg_rf"]
+    beta         = reg["beta"]
+    avg_mkt_prem = reg["avg_mkt_ret"] - reg["avg_rf"]
+    risk_comp_mo = beta * avg_mkt_prem
+    alpha_mo     = reg["alpha"]
+    total_mo     = avg_rf + risk_comp_mo + alpha_mo
+
+    # Annualise each component via compounding
+    rf_annual         = _annualise_monthly(avg_rf)
+    risk_comp_annual  = _annualise_monthly(risk_comp_mo)
+    alpha_annual      = _annualise_monthly(alpha_mo)
+    total_annual      = _annualise_monthly(total_mo)
+
+    return {
+        "rf_mo":         avg_rf,
+        "rf_yr":         rf_annual,
+        "risk_comp_mo":  risk_comp_mo,
+        "risk_comp_yr":  risk_comp_annual,
+        "alpha_mo":      alpha_mo,
+        "alpha_yr":      alpha_annual,
+        "total_mo":      total_mo,
+        "total_yr":      total_annual,
+        "mkt_premium_mo": avg_mkt_prem,
+    }
+
+
+# ── 8e. Forward projection ───────────────────────────────────────────────────
+
+def forward_projection(beta, rf_annual, mkt_premium_annual):
+    """
+    Compute the CAPM required return: E[r] = rf + β × market premium.
+
+    Parameters
+    ----------
+    beta              : float
+    rf_annual         : float  annualised risk-free rate (decimal)
+    mkt_premium_annual: float  annualised market risk premium (decimal)
+
+    Returns
+    -------
+    dict with required_return (decimal) and components
+    """
+    required = rf_annual + beta * mkt_premium_annual
+    return {
+        "required_return": required,
+        "rf":              rf_annual,
+        "beta":            beta,
+        "mkt_premium":     mkt_premium_annual,
+    }
+
+
+# ── 8f. Warnings engine ──────────────────────────────────────────────────────
+
+def capm_warnings(n_months, beta_lower, beta_upper, r_squared,
+                  alpha_annual, missing_pct):
+    """
+    Generate contextual data-quality and reliability warnings.
+
+    Returns
+    -------
+    list of (level, message) tuples. level = 'warning' | 'info'
+    """
+    warnings = []
+
+    if n_months < 36:
+        warnings.append((
+            "warning",
+            f"Fewer than 36 months of data ({n_months} months). "
+            "Beta estimates are less reliable. Prof. Weisbenner recommends "
+            "at least 3–5 years."
+        ))
+
+    ci_width = beta_upper - beta_lower
+    if ci_width > 0.5:
+        warnings.append((
+            "warning",
+            f"Wide confidence interval on beta ({ci_width:.2f}). "
+            "Estimate is imprecise. Consider a longer time window."
+        ))
+
+    if r_squared < 0.1:
+        warnings.append((
+            "info",
+            f"Low R² ({r_squared:.3f}). Most of this stock's return variation "
+            "is firm-specific. Beta is a weak predictor of its returns."
+        ))
+
+    if abs(alpha_annual) > 0.10:
+        direction = "positive" if alpha_annual > 0 else "negative"
+        warnings.append((
+            "info",
+            f"Very high {direction} alpha ({alpha_annual*100:.1f}%/yr). "
+            "Verify data quality. Sustained outperformance of this magnitude is rare."
+        ))
+
+    if missing_pct > 5:
+        warnings.append((
+            "warning",
+            f"Missing return data detected ({missing_pct:.1f}% of expected months). "
+            "Results may be unreliable."
+        ))
+
+    return warnings
+
+
+# ── 8g. Summary card ──────────────────────────────────────────────────────────
+
+def capm_summary_card(ticker, start_date, end_date, reg, beta_interp, decomp):
+    """
+    Generate the plain-language summary card data.
+
+    Returns
+    -------
+    dict with all fields needed for the summary card display
+    """
+    beta  = reg["beta"]
+    alpha = reg["alpha_annual"]
+    r_sq  = reg["r_squared"]
+
+    # Alpha interpretation
+    if abs(alpha) < 0.005:  # within 0.5% annually
+        alpha_label = "In line with"
+    elif alpha > 0:
+        alpha_label = "Outperforms"
+    else:
+        alpha_label = "Underperforms"
+
+    # Sharpe comparison
+    if reg["stock_sharpe"] > reg["mkt_sharpe"] + 0.01:
+        sharpe_label = "Stock has higher risk-adjusted return than market"
+    elif reg["stock_sharpe"] < reg["mkt_sharpe"] - 0.01:
+        sharpe_label = "Market has higher risk-adjusted return than stock"
+    else:
+        sharpe_label = "Similar risk-adjusted returns"
+
+    # Verdict logic
+    alpha_pos   = alpha > 0.005
+    alpha_neg   = alpha < -0.005
+    alpha_zero  = not alpha_pos and not alpha_neg
+    beta_low    = beta < 1.0
+    beta_high   = beta >= 1.0
+
+    if alpha_pos and beta_low:
+        verdict = ("Defensive outperformer",
+                   "Low risk, beats benchmark. Historically attractive "
+                   "(like Coca-Cola).")
+    elif alpha_pos and beta_high:
+        verdict = ("Aggressive outperformer",
+                   "High risk, beats benchmark. Strong historical performance "
+                   "but amplifies downturns.")
+    elif alpha_zero:
+        verdict = ("Fairly priced",
+                   "Performs in line with CAPM. Return matches its risk level "
+                   "— no edge over a passive index.")
+    elif alpha_neg and beta_low:
+        verdict = ("Defensive underperformer",
+                   "Low risk but disappoints even on a risk-adjusted basis.")
+    else:  # alpha_neg and beta_high
+        verdict = ("Worst case",
+                   "High risk AND underperforms benchmark. "
+                   "Avoid adding to a diversified portfolio.")
+
+    return {
+        "ticker":       ticker,
+        "start_date":   start_date,
+        "end_date":     end_date,
+        "beta":         beta,
+        "beta_cat":     beta_interp["category"],
+        "beta_equiv":   beta_interp["portfolio_equiv"],
+        "alpha_yr":     alpha,
+        "alpha_label":  alpha_label,
+        "r_squared":    r_sq,
+        "mkt_pct":      r_sq * 100,
+        "firm_pct":     (1 - r_sq) * 100,
+        "stock_sharpe": reg["stock_sharpe"],
+        "mkt_sharpe":   reg["mkt_sharpe"],
+        "sharpe_label": sharpe_label,
+        "verdict_title": verdict[0],
+        "verdict_text":  verdict[1],
+    }
