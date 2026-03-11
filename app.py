@@ -2016,8 +2016,70 @@ with tab_capm:
             )
             capm_months = _period_options[_period_label]
 
+        # ── Risk-Free Rate source ─────────────────────────────────────────
+        _rf_col1, _rf_col2 = st.columns([1, 1])
+        with _rf_col1:
+            _rf_mode = st.radio(
+                "Risk-Free Rate Source",
+                options=["Auto (13-Week T-Bill)", "Manual Entry"],
+                index=0,
+                key="capm_rf_mode",
+                horizontal=True,
+                help=(
+                    "**Auto**: Downloads the CBOE 13-Week Treasury Bill "
+                    "Index (^IRX) from Yahoo Finance — time-varying monthly rate. "
+                    "**Manual**: Uses a fixed annualised rate you specify."
+                ),
+            )
+        with _rf_col2:
+            if _rf_mode == "Manual Entry":
+                _rf_manual = st.number_input(
+                    "Risk-Free Rate (%/yr)",
+                    value=4.50,
+                    min_value=0.0,
+                    max_value=20.0,
+                    step=0.25,
+                    format="%.2f",
+                    key="capm_rf_manual",
+                    help="Enter an annualised risk-free rate (e.g. 4.50 for 4.50%/yr)",
+                )
+                capm_rf_override = _rf_manual / 100  # convert to decimal
+            else:
+                capm_rf_override = None
+                st.caption("Using ^IRX (13-Week T-Bill) from Yahoo Finance")
+
         capm_run = st.button("▶ Run CAPM Analysis", type="primary",
                              use_container_width=True, key="capm_run_btn")
+
+    # ── Data source description ───────────────────────────────────────────
+    with st.expander("📋 Data Sources", expanded=False):
+        st.markdown(
+            "| Data Series | Source | Ticker | Description |\n"
+            "|---|---|---|---|\n"
+            "| **Stock Returns** | Yahoo Finance | *(user-entered)* | "
+            "Monthly adjusted close prices → percentage returns |\n"
+            "| **Market Proxy** | Yahoo Finance | `SPY` | "
+            "S&P 500 ETF — standard broad-market proxy for the CAPM market portfolio |\n"
+            "| **Risk-Free Rate** | Yahoo Finance | `^IRX` | "
+            "CBOE 13-Week Treasury Bill Index — annualised yield, "
+            "converted to monthly: `rf_mo = (^IRX / 100) / 12` |\n"
+            "\n"
+            "**Notes:**\n"
+            "- Returns are computed as simple percentage changes on "
+            "monthly adjusted closing prices.\n"
+            "- Excess returns = total return − risk-free rate "
+            "(computed month-by-month).\n"
+            "- The 13-week T-bill (`^IRX`) is the standard academic proxy "
+            "for the short-term risk-free rate in CAPM regressions. "
+            "It is time-varying — each month uses the prevailing T-bill "
+            "yield for that month.\n"
+            "- When **Manual Entry** is selected, a fixed flat rate replaces "
+            "`^IRX` for all months (useful for stress-testing or when "
+            "T-bill data is unavailable).\n"
+            "- **Market proxy choice**: SPY tracks the S&P 500 index. "
+            "Alternatives include VTI (total US market) or a global index. "
+            "The choice of proxy can affect beta estimates."
+        )
 
     # ── Warn if period < 3 years ──────────────────────────────────────────────
     if capm_months < 36:
@@ -2030,13 +2092,14 @@ with tab_capm:
 
     # ── Fetch & compute (cached) ──────────────────────────────────────────────
     @st.cache_data(ttl=3600, show_spinner="Fetching market data…")
-    def _cached_capm_fetch(ticker, months):
-        return fetch_capm_data(ticker, months)
+    def _cached_capm_fetch(ticker, months, rf_override):
+        return fetch_capm_data(ticker, months, rf_override=rf_override)
 
     if capm_run or st.session_state.get("capm_result") is not None:
         # Fetch data (or use cached)
         if capm_run:
-            _data = _cached_capm_fetch(capm_ticker.strip().upper(), capm_months)
+            _data = _cached_capm_fetch(capm_ticker.strip().upper(), capm_months,
+                                       capm_rf_override)
             st.session_state["capm_result"] = _data
         else:
             _data = st.session_state["capm_result"]
@@ -2044,12 +2107,13 @@ with tab_capm:
         if _data.get("error"):
             st.error(_data["error"])
         else:
-            _df     = _data["df"]
-            _ticker = _data["ticker"]
-            _start  = _data["start_date"]
-            _end    = _data["end_date"]
-            _n_mo   = _data["n_months"]
-            _miss   = _data["missing_pct"]
+            _df      = _data["df"]
+            _ticker  = _data["ticker"]
+            _start   = _data["start_date"]
+            _end     = _data["end_date"]
+            _n_mo    = _data["n_months"]
+            _miss    = _data["missing_pct"]
+            _rf_src  = _data["rf_source"]
 
             # ── Run regression ────────────────────────────────────────────
             _reg    = run_capm_regression(_df)
@@ -2108,7 +2172,8 @@ with tab_capm:
 
             st.markdown(
                 f"<div class='info-box'>📅 <b>Data range:</b> "
-                f"{_start} – {_end} ({_n_mo} months)</div>",
+                f"{_start} – {_end} ({_n_mo} months)<br>"
+                f"💰 <b>Risk-free rate:</b> {_rf_src}</div>",
                 unsafe_allow_html=True,
             )
 

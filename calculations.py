@@ -1090,14 +1090,18 @@ def _annualise_monthly(monthly_rate):
     return (1 + monthly_rate) ** 12 - 1
 
 
-def fetch_capm_data(ticker, months=60):
+def fetch_capm_data(ticker, months=60, rf_override=None):
     """
     Fetch monthly returns for a stock, market proxy (SPY), and risk-free rate.
 
     Parameters
     ----------
-    ticker : str   Stock ticker (e.g. 'KO', 'AAPL')
-    months : int   Number of months of history (24, 36, 60, 120, 240)
+    ticker      : str    Stock ticker (e.g. 'KO', 'AAPL')
+    months      : int    Number of months of history (24, 36, 60, 120, 240)
+    rf_override : float or None
+        If provided, use this annualised rate (decimal, e.g. 0.045 for 4.5%)
+        instead of downloading ^IRX.  The rate is converted to a flat
+        monthly value: rf_monthly = rf_override / 12.
 
     Returns
     -------
@@ -1109,6 +1113,7 @@ def fetch_capm_data(ticker, months=60):
         'end_date'     : str
         'n_months'     : int
         'missing_pct'  : float (0-100)
+        'rf_source'    : str   description of the RF data source used
         'error'        : str or None
     """
     import yfinance as yf
@@ -1127,9 +1132,12 @@ def fetch_capm_data(ticker, months=60):
         mkt = yf.download("SPY", start=start_dt, end=end_dt,
                           interval="1mo", auto_adjust=True, progress=False)
 
-        # Fetch 13-week T-bill rate as RF proxy
-        tbill = yf.download("^IRX", start=start_dt, end=end_dt,
-                            interval="1mo", auto_adjust=True, progress=False)
+        # Fetch 13-week T-bill rate as RF proxy (skip if manual override)
+        if rf_override is None:
+            tbill = yf.download("^IRX", start=start_dt, end=end_dt,
+                                interval="1mo", auto_adjust=True, progress=False)
+        else:
+            tbill = pd.DataFrame()  # empty — not needed
     except Exception as e:
         return {"error": f"Data download failed: {e}"}
 
@@ -1138,7 +1146,7 @@ def fetch_capm_data(ticker, months=60):
         stock.columns = stock.columns.get_level_values(0)
     if isinstance(mkt.columns, pd.MultiIndex):
         mkt.columns = mkt.columns.get_level_values(0)
-    if isinstance(tbill.columns, pd.MultiIndex):
+    if not tbill.empty and isinstance(tbill.columns, pd.MultiIndex):
         tbill.columns = tbill.columns.get_level_values(0)
 
     # Calculate monthly returns
@@ -1148,13 +1156,21 @@ def fetch_capm_data(ticker, months=60):
     mkt_ret = mkt["Close"].pct_change().dropna()
     mkt_ret.name = "mkt_ret"
 
-    # RF: ^IRX is annualised %, convert to monthly decimal
-    if not tbill.empty and "Close" in tbill.columns:
+    # Risk-free rate
+    if rf_override is not None:
+        # Manual override: flat monthly rate from user-supplied annualised rate
+        rf_monthly = pd.Series(rf_override / 12, index=stock_ret.index, name="rf")
+        rf_source = f"Manual entry ({rf_override*100:.2f}%/yr → {rf_override/12*100:.4f}%/mo)"
+    elif not tbill.empty and "Close" in tbill.columns:
+        # ^IRX is annualised %, convert to monthly decimal
         rf_monthly = (tbill["Close"] / 100) / 12
         rf_monthly.name = "rf"
+        rf_source = ("CBOE 13-Week Treasury Bill Index (^IRX) via Yahoo Finance — "
+                     "annualised yield converted to monthly: rf_mo = (^IRX / 100) / 12")
     else:
-        # Fallback: use a flat 0.04/12 if T-bill data unavailable
+        # Fallback: use a flat 4%/yr if T-bill data unavailable
         rf_monthly = pd.Series(0.04 / 12, index=stock_ret.index, name="rf")
+        rf_source = "Fallback: flat 4.00%/yr (^IRX data unavailable)"
 
     # Align all series on the same dates
     df = pd.DataFrame({
@@ -1201,6 +1217,7 @@ def fetch_capm_data(ticker, months=60):
         "end_date":   end_str,
         "n_months":   actual_months,
         "missing_pct": round(missing_pct, 1),
+        "rf_source":  rf_source,
         "error":      None,
     }
 
