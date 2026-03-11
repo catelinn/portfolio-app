@@ -1708,3 +1708,208 @@ def chart_n_summary_table(frontier_df, asset_names, mvp, max_sr, mu, sd, rf):
     })
 
     return pd.DataFrame(rows)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CAPM ANALYSIS CHARTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def chart_capm_scatter(df, reg, ticker):
+    """
+    Chart A — CAPM Scatter Plot with regression line.
+
+    X-axis: Market excess return (monthly %)
+    Y-axis: Stock excess return (monthly %)
+    Regression line with slope = β, reference line slope = 1.
+    """
+    mkt_ex = df["mkt_excess"].values * 100   # convert to %
+    stk_ex = df["stock_excess"].values * 100
+
+    beta  = reg["beta"]
+    alpha = reg["alpha"] * 100  # monthly alpha in %
+    r_sq  = reg["r_squared"]
+
+    fig = go.Figure()
+
+    # Scatter points — each dot = one month
+    fig.add_trace(go.Scatter(
+        x=mkt_ex, y=stk_ex,
+        mode="markers",
+        marker=dict(size=7, color=COLORS["blue"], opacity=0.6,
+                    line=dict(width=0.5, color=COLORS["navy"])),
+        name="Monthly Returns",
+        hovertemplate=(
+            "Market Excess: %{x:.2f}%<br>"
+            "Stock Excess: %{y:.2f}%<br>"
+            "<extra></extra>"
+        ),
+    ))
+
+    # Regression line
+    x_range = np.linspace(min(mkt_ex) - 1, max(mkt_ex) + 1, 100)
+    y_reg = alpha + beta * x_range
+    fig.add_trace(go.Scatter(
+        x=x_range, y=y_reg,
+        mode="lines",
+        line=dict(color=COLORS["red"], width=2.5),
+        name=f"Regression (β={beta:.2f})",
+    ))
+
+    # Reference line: slope = 1 through origin (the market itself)
+    y_ref = x_range
+    fig.add_trace(go.Scatter(
+        x=x_range, y=y_ref,
+        mode="lines",
+        line=dict(color=COLORS["gray"], width=1.5, dash="dash"),
+        name="Market (β=1)",
+    ))
+
+    # Alpha annotation at y-intercept
+    fig.add_trace(go.Scatter(
+        x=[0], y=[alpha],
+        mode="markers",
+        marker=dict(size=10, color=COLORS["amber"], symbol="diamond",
+                    line=dict(width=1.5, color=COLORS["black"])),
+        name=f"α = {alpha:.3f}%/mo",
+        showlegend=True,
+    ))
+
+    # Annotation box
+    fig.add_annotation(
+        x=0.02, y=0.98, xref="paper", yref="paper",
+        text=(f"β = {beta:.3f} (slope)<br>"
+              f"α = {alpha:.3f}%/mo (intercept)<br>"
+              f"R² = {r_sq:.3f}"),
+        showarrow=False,
+        font=dict(size=11, color=COLORS["navy"]),
+        bgcolor="rgba(255,255,255,0.9)",
+        bordercolor=COLORS["navy"], borderwidth=1, borderpad=6,
+        align="left", xanchor="left", yanchor="top",
+    )
+
+    layout = _base_layout(
+        f"CAPM Regression — {ticker}",
+        "Market Excess Return (monthly %)",
+        "Stock Excess Return (monthly %)",
+        f"Each dot = one month | Regression line slope = β"
+    )
+    fig.update_layout(**layout)
+    return fig
+
+
+def chart_capm_sml(reg, ticker, decomp):
+    """
+    Chart B — Security Market Line (SML).
+
+    X-axis: Beta, Y-axis: Expected return (annualised %).
+    SML line + three plotted points (T-Bills, Market, Stock).
+    """
+    beta        = reg["beta"]
+    avg_rf_yr   = decomp["rf_yr"] * 100
+    mkt_prem_yr = decomp["risk_comp_yr"] / beta * 100 if abs(beta) > 1e-10 else 0
+    avg_mkt_yr  = avg_rf_yr + mkt_prem_yr
+    avg_stock_yr = decomp["total_yr"] * 100
+    alpha_yr    = decomp["alpha_yr"] * 100
+
+    # Use the historical market premium for the SML line
+    hist_mkt_prem = (decomp["mkt_premium_mo"])
+    hist_mkt_prem_yr = ((1 + hist_mkt_prem) ** 12 - 1) * 100
+
+    fig = go.Figure()
+
+    # SML line: E[r] = rf + β × market premium
+    beta_range = np.linspace(-0.5, 2.5, 100)
+    sml_returns = avg_rf_yr + beta_range * hist_mkt_prem_yr
+
+    fig.add_trace(go.Scatter(
+        x=beta_range, y=sml_returns,
+        mode="lines",
+        line=dict(color=COLORS["navy"], width=2.5),
+        name="Security Market Line",
+    ))
+
+    # T-Bills point (β=0, rf)
+    fig.add_trace(go.Scatter(
+        x=[0], y=[avg_rf_yr],
+        mode="markers+text",
+        marker=dict(size=14, color=COLORS["red"], symbol="circle",
+                    line=dict(width=1.5, color=COLORS["black"])),
+        text=["T-Bills"], textposition="top center",
+        textfont=dict(size=11, color=COLORS["red"]),
+        name="T-Bills (β=0)",
+        hovertemplate="T-Bills<br>β = 0<br>Return = %{y:.2f}%/yr<extra></extra>",
+    ))
+
+    # Market point (β=1, E[rM])
+    sml_at_1 = avg_rf_yr + hist_mkt_prem_yr
+    fig.add_trace(go.Scatter(
+        x=[1], y=[sml_at_1],
+        mode="markers+text",
+        marker=dict(size=14, color=COLORS["blue"], symbol="circle",
+                    line=dict(width=1.5, color=COLORS["black"])),
+        text=["Market"], textposition="top center",
+        textfont=dict(size=11, color=COLORS["blue"]),
+        name="Market (β=1)",
+        hovertemplate="Market<br>β = 1<br>Return = %{y:.2f}%/yr<extra></extra>",
+    ))
+
+    # Stock point (β_estimated, actual avg return)
+    fig.add_trace(go.Scatter(
+        x=[beta], y=[avg_stock_yr],
+        mode="markers+text",
+        marker=dict(size=16, color=COLORS["amber"], symbol="star",
+                    line=dict(width=1.5, color=COLORS["black"])),
+        text=[ticker], textposition="top center",
+        textfont=dict(size=12, color=COLORS["amber"], family="Arial Black"),
+        name=f"{ticker} (β={beta:.2f})",
+        hovertemplate=(
+            f"{ticker}<br>"
+            f"β = {beta:.2f}<br>"
+            "Actual Return = %{y:.2f}%/yr<br>"
+            f"CAPM Expected = {avg_rf_yr + beta * hist_mkt_prem_yr:.2f}%/yr<br>"
+            f"Alpha = {alpha_yr:+.2f}%/yr<extra></extra>"
+        ),
+    ))
+
+    # Alpha arrow: vertical distance between stock and SML
+    sml_at_beta = avg_rf_yr + beta * hist_mkt_prem_yr
+    if abs(alpha_yr) > 0.1:
+        arrow_color = COLORS["green"] if alpha_yr > 0 else COLORS["red"]
+        fig.add_annotation(
+            x=beta, y=avg_stock_yr,
+            ax=beta, ay=sml_at_beta,
+            xref="x", yref="y", axref="x", ayref="y",
+            showarrow=True,
+            arrowhead=2, arrowsize=1.5, arrowwidth=2,
+            arrowcolor=arrow_color,
+        )
+        mid_y = (avg_stock_yr + sml_at_beta) / 2
+        side = "left" if beta > 1.5 else "right"
+        fig.add_annotation(
+            x=beta, y=mid_y,
+            text=f"α = {alpha_yr:+.1f}%/yr",
+            showarrow=False,
+            font=dict(size=11, color=arrow_color, family="Arial Black"),
+            xanchor=side,
+            xshift=10 if side == "right" else -10,
+        )
+
+    # Note below chart
+    fig.add_annotation(
+        x=0.5, y=-0.15, xref="paper", yref="paper",
+        text=("Historical market premium used as proxy for expected premium. "
+              "Forward-looking premium may differ."),
+        showarrow=False,
+        font=dict(size=10, color=COLORS["gray"]),
+        xanchor="center",
+    )
+
+    layout = _base_layout(
+        f"Security Market Line — {ticker}",
+        "Beta (β)",
+        "Expected Return (annualised %)",
+        "SML: E[r] = rf + β × Market Premium"
+    )
+    layout["margin"]["b"] = 140
+    fig.update_layout(**layout)
+    return fig
